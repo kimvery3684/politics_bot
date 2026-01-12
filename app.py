@@ -1,236 +1,245 @@
 import streamlit as st
+import random
+import requests
 from PIL import Image, ImageDraw, ImageFont
-import os
+from io import BytesIO
+import cv2
+import numpy as np
+from duckduckgo_search import DDGS
 
-# --- [1. 기본 설정 및 영구 저장소 만들기] ---
-st.set_page_config(page_title="JJ 쇼츠 마스터 (영구저장)", page_icon="🏛️", layout="wide")
+# --- [1. 기본 설정] ---
+st.set_page_config(page_title="쇼츠 자동 생성기 (저작권 보호 Ver)", page_icon="🛡️", layout="wide")
 
-# 폰트 설정
-FONT_FILE = "NanumGothic-ExtraBold.ttf"
-
-# 📁 [핵심] 사진을 저장할 폴더 만들기 (없으면 생성)
-SAVE_DIR = "saved_images"
-if not os.path.exists(SAVE_DIR):
-    os.makedirs(SAVE_DIR)
-
-# --- [2. 기능 함수] ---
-def get_font(size):
-    if os.path.exists(FONT_FILE):
-        return ImageFont.truetype(FONT_FILE, size)
-    else:
-        return ImageFont.load_default()
-
-# 💾 사진 저장 함수 (핵심 기능)
-def save_uploaded_file(uploaded_file, name):
-    if uploaded_file is not None:
-        try:
-            # 이미지를 열어서 RGB로 변환 (투명도 오류 방지)
-            image = Image.open(uploaded_file).convert("RGB")
-            # 파일명: 이름.jpg 로 저장
-            save_path = os.path.join(SAVE_DIR, f"{name}.jpg")
-            image.save(save_path, quality=95)
-            return True
-        except Exception as e:
-            st.error(f"저장 중 오류 발생: {e}")
-            return False
+# --- [2. 비밀번호 보안] ---
+def check_password():
+    if "password_correct" not in st.session_state: st.session_state.password_correct = False
+    if st.session_state.password_correct: return True
+    st.text_input("비밀번호를 입력하세요", type="password", key="password_input", on_change=password_entered)
     return False
 
-# 📂 사진 불러오기 함수
-def load_saved_image(name):
-    path = os.path.join(SAVE_DIR, f"{name}.jpg")
-    if os.path.exists(path):
-        return Image.open(path).convert("RGB")
+def password_entered():
+    if st.session_state["password_input"] == st.secrets["APP_PASSWORD"]:
+        st.session_state.password_correct = True
+        del st.session_state["password_input"]
+    else: st.error("비밀번호가 틀렸습니다.")
+
+if not check_password(): st.stop()
+
+# --- [3. 데이터 설정] ---
+TROT_SINGERS = [
+    "임영웅","영탁","이찬원","김호중","정동원","장민호","김희재","나훈아","남진","송가인",
+    "장윤정","홍진영","박군","박서진","진성","설운도","태진아","송대관","김연자","주현미",
+    "양지은","전유진","안성훈","박지현","손태진","에녹","신성","민수현","김다현","김태연",
+    "요요미","마이진","린","박구윤","신유","금잔디","조항조","강진","김수희","하춘화",
+    "현숙","문희옥","김혜연","진해성","홍지윤","황영웅","공훈","김중연","박민수","나상도",
+    "최수호","진욱","박성온","정서주","배아현","오유진","미스김","나영","김소연","정슬",
+    "박주희","김수찬","나태주","강혜연","윤수현","조정민","설하윤","류지광","김경민","남승민",
+    "황윤성","강태관","김나희","정미애","홍자","정다경","은가은","별사랑","김의영","황민호",
+    "황민우","이대원","신인선","노지훈","양지원","한강","재하","신승태","최우진","성리",
+    "추혁진","박상철","서주경","한혜진","유지나","김용필","조명섭"
+]
+
+QUIZ_TEMPLATES = [
+    "2025년 트로트 흐름을\n이끌었던 가수는?",
+    "다음 중 '{name}' 님은\n몇 번일까요?",
+    "이 멋진 무대의 주인공,\n'{name}'을 찾아보세요!"
+]
+
+# --- [4. 핵심 기능 함수] ---
+
+# 4-1. 이미지 검색 (DuckDuckGo)
+def search_image_auto(query):
+    """저작권 안전지대인 위키미디어/뉴스 위주로 검색"""
+    try:
+        with DDGS() as ddgs:
+            keywords = [f"{query} wiki image", f"{query} singer performance"]
+            for key in keywords:
+                results = list(ddgs.images(key, max_results=1))
+                if results:
+                    return results[0]['image']
+    except Exception as e:
+        print(f"검색 실패: {e}")
     return None
 
-# --- [3. 이미지 생성 엔진 (HTML 레이아웃 반영)] ---
-def create_quiz_image(names, d):
-    # 캔버스 생성 (1080x1920)
-    canvas = Image.new('RGB', (1080, 1920), d['bg_color'])
+# 4-2. 스케치 변환 (OpenCV)
+def convert_to_sketch(pil_image):
+    """사진을 연필 스케치 그림처럼 변환"""
+    img_np = np.array(pil_image)
+    
+    # 컬러 이미지가 아닐 경우 처리
+    if len(img_np.shape) == 2:
+        gray = img_np
+    else:
+        gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+    
+    inverted = 255 - gray
+    blurred = cv2.GaussianBlur(inverted, (21, 21), 0)
+    inverted_blurred = 255 - blurred
+    
+    # 0으로 나누기 방지
+    sketch = cv2.divide(gray, inverted_blurred, scale=256.0)
+    
+    return Image.fromarray(cv2.cvtColor(sketch, cv2.COLOR_GRAY2RGB))
+
+# 4-3. 폰트 로드 (캐싱 적용)
+@st.cache_resource
+def load_fonts():
+    font_url = "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-ExtraBold.ttf"
+    try:
+        response = requests.get(font_url, timeout=10)
+        return BytesIO(response.content)
+    except Exception as e:
+        st.warning(f"폰트 다운로드 실패 ({e}). 기본 폰트를 사용합니다.")
+        return None
+
+# 4-4. 최종 이미지 합성
+def create_shorts_image(q_text, names, image_sources, use_sketch_filter):
+    # 캔버스 생성 (FHD 세로)
+    canvas = Image.new('RGB', (1080, 1920), (0, 0, 0))
     draw = ImageDraw.Draw(canvas)
     
-    font_top = get_font(d['top_fs'])
-    font_bot = get_font(d['bot_fs'])
-    font_label = get_font(d['label_size'])
-
-    # === [A. 상단 바] ===
-    draw.rectangle([(0, 0), (1080, d['top_h'])], fill=d['top_bg'])
-    
-    # 상단 텍스트 (줄간격 적용)
+    # 폰트 설정
+    font_bytes = load_fonts()
     try:
-        bbox = draw.textbbox((0, 0), d['top_text'], font=font_top, spacing=d['top_lh'])
-        w = bbox[2] - bbox[0]
-        h = bbox[3] - bbox[1] # 높이 계산
-        
-        # 박스 정중앙 배치
-        draw.text(
-            (540, d['top_h'] / 2), 
-            d['top_text'], 
-            font=font_top, 
-            fill=d['top_color'], 
-            anchor="mm", 
-            align="center",
-            spacing=d['top_lh']
-        )
-    except: pass
+        if font_bytes:
+            font_title = ImageFont.truetype(font_bytes, 100)
+            font_name = ImageFont.truetype(font_bytes, 70)
+        else:
+            raise Exception("Font load failed")
+    except:
+        font_title = ImageFont.load_default()
+        font_name = ImageFont.load_default()
 
-    # === [B. 중앙 4분할 그리드] ===
-    # 상단바 끝 ~ 하단바 시작 사이의 공간을 계산
-    grid_start_y = d['top_h']
-    grid_end_y = 1920 - d['bot_h']
-    grid_height = grid_end_y - grid_start_y
-    
-    # 4분할 좌표 계산
-    cell_w = 1080 // 2
-    cell_h = grid_height // 2
-    
-    positions = [
-        (0, grid_start_y), (cell_w, grid_start_y),          # 1행
-        (0, grid_start_y + cell_h), (cell_w, grid_start_y + cell_h) # 2행
-    ]
+    # 제목 그리기 (중앙 정렬 계산)
+    bbox = draw.textbbox((0, 0), q_text, font=font_title)
+    text_w = bbox[2] - bbox[0]
+    draw.text(((1080 - text_w) / 2, 150), q_text, font=font_title, fill="#FFFF00", align="center")
 
-    for i, (name, pos) in enumerate(zip(names, positions)):
-        # 1. 저장된 이미지 불러오기
-        img = load_saved_image(name)
-        
-        # 이미지가 없으면 회색 박스
-        if img is None:
-            img = Image.new('RGB', (cell_w, cell_h), (50, 50, 50))
-            idraw = ImageDraw.Draw(img)
-            idraw.text((cell_w/2, cell_h/2), "사진 없음", font=get_font(40), fill="white", anchor="mm")
-        
-        # 2. 이미지 크기 맞추기 (Center Crop)
-        img_ratio = img.width / img.height
-        target_ratio = cell_w / cell_h
-        
-        if img_ratio > target_ratio: # 이미지가 더 넓음 -> 양옆 자르기
-            new_width = int(img.height * target_ratio)
-            offset = (img.width - new_width) // 2
-            img = img.crop((offset, 0, offset + new_width, img.height))
-        else: # 이미지가 더 김 -> 위아래 자르기
-            new_height = int(img.width / target_ratio)
-            offset = (img.height - new_height) // 2
-            img = img.crop((0, offset, img.width, offset + new_height))
+    # 이미지 배치 좌표 (2x2 격자)
+    positions = [(50, 500), (560, 500), (50, 1100), (560, 1100)]
+    size = (470, 550)
+
+    for i, (name, source, pos) in enumerate(zip(names, image_sources, positions)):
+        img = None
+        try:
+            # 소스 타입에 따라 이미지 로드
+            if source is None:
+                pass
+            elif isinstance(source, BytesIO): # 직접 업로드
+                img = Image.open(source).convert("RGB")
+            elif isinstance(source, str) and source.startswith("http"): # 검색 URL
+                response = requests.get(source, timeout=5)
+                img = Image.open(BytesIO(response.content)).convert("RGB")
             
-        img = img.resize((cell_w, cell_h), Image.LANCZOS)
-        
-        # 3. 캔버스에 붙이기
-        canvas.paste(img, pos)
-        
-        # 4. 이름표 달기 (하단 고정)
-        label_text = f"{i+1}. {name}"
-        label_h = 70
-        label_y = pos[1] + cell_h - label_h
-        
-        # 이름표 배경
-        draw.rectangle([pos[0], label_y, pos[0]+cell_w, pos[1]+cell_h], fill=d['label_bg'])
-        # 이름 텍스트
-        draw.text((pos[0] + cell_w/2, label_y + label_h/2), label_text, font=font_label, fill=d['label_color'], anchor="mm")
-        
-        # 테두리 (선택)
-        draw.rectangle([pos[0], pos[1], pos[0]+cell_w, pos[1]+cell_h], outline="black", width=2)
+            if img:
+                # 스케치 필터 적용
+                if use_sketch_filter:
+                    img = convert_to_sketch(img)
 
-    # === [C. 하단 바] ===
-    draw.rectangle([(0, 1920 - d['bot_h']), (1080, 1920)], fill=d['bot_bg'])
-    
-    try:
-        draw.text(
-            (540, 1920 - (d['bot_h'] / 2)), 
-            d['bot_text'], 
-            font=font_bot, 
-            fill=d['bot_color'], 
-            anchor="mm", 
-            align="center",
-            spacing=d['bot_lh']
-        )
-    except: pass
+                # 크롭 및 리사이즈 (비율 유지)
+                img_ratio = img.width / img.height
+                target_ratio = size[0] / size[1]
+                
+                if img_ratio > target_ratio:
+                    new_width = int(img.height * target_ratio)
+                    offset = (img.width - new_width) // 2
+                    img = img.crop((offset, 0, offset + new_width, img.height))
+                else:
+                    new_height = int(img.width / target_ratio)
+                    offset = (img.height - new_height) // 2
+                    img = img.crop((0, offset, img.width, offset + new_height))
+                
+                img = img.resize(size, Image.LANCZOS)
+        except Exception as e:
+            print(f"이미지 처리 중 오류: {e}")
+            img = None
+
+        # 이미지 로드 실패 시 회색 박스
+        if img is None:
+            img = Image.new('RGB', size, (50, 50, 50))
+            
+        canvas.paste(img, pos)
+
+        # 이름표 달기
+        tag_w, tag_h = 300, 120
+        tag_x = pos[0] + (size[0] - tag_w) // 2
+        tag_y = pos[1] + size[1] - (tag_h // 2)
+        
+        draw.rounded_rectangle([tag_x, tag_y, tag_x + tag_w, tag_y + tag_h], radius=20, fill="black", outline="#00FF00", width=3)
+        
+        # 이름 중앙 정렬
+        bbox_name = draw.textbbox((0, 0), name, font=font_name)
+        name_w = bbox_name[2] - bbox_name[0]
+        name_h = bbox_name[3] - bbox_name[1]
+        draw.text((tag_x + (tag_w - name_w) / 2, tag_y + (tag_h - name_h) / 2 - 10), name, font=font_name, fill="#00FF00")
 
     return canvas
 
-# --- [4. 메인 UI] ---
-st.title("🏛️ 정치/인물 퀴즈 (영구저장됨)")
+# --- [5. 메인 UI] ---
+st.title("🛡️ 쇼츠 자동 생성기 (저작권 회피 모드)")
+st.markdown("이미지를 **'스케치 그림'**처럼 변환하여 저작권/초상권 위험을 줄입니다.")
 
-col_left, col_right = st.columns([1, 1.2])
+# 사이드바 설정
+with st.sidebar:
+    st.header("⚙️ 안전 설정")
+    use_sketch = st.checkbox("🎨 스케치 필터 적용 (추천)", value=True, help="사진을 그림처럼 바꿔서 저작권 봇을 피합니다.")
 
-# [왼쪽] 설정 패널
-with col_left:
-    st.info("✅ 여기에 등록한 사진은 껐다 켜도 유지됩니다!")
-    
-    # 1. 인물 등록 섹션
-    with st.expander("📸 인물 사진 등록 (영구 저장)", expanded=True):
-        # 4명의 인물 이름 입력
-        names_input = st.text_input("인물 이름 4명 (쉼표로 구분)", "이재명, 한동훈, 조국, 이준석")
-        names = [n.strip() for n in names_input.split(',')]
+# 버튼 클릭 시 퀴즈 생성
+if st.button("🚀 퀴즈 & 이미지 자동 생성", type="primary", use_container_width=True):
+    with st.spinner("🤖 저작권 안전지대에서 사진을 찾는 중..."):
+        correct_answer = random.choice(TROT_SINGERS)
+        wrong_answers = random.sample([s for s in TROT_SINGERS if s != correct_answer], 3)
+        options = wrong_answers + [correct_answer]
+        random.shuffle(options)
         
-        # 4개로 갯수 맞추기
-        while len(names) < 4: names.append(f"인물 {len(names)+1}")
-        names = names[:4]
-
-        # 각 인물별 파일 업로더 생성
-        st.write("---")
-        for name in names:
-            col_u1, col_u2 = st.columns([3, 1])
-            with col_u1:
-                uploaded = st.file_uploader(f"'{name}' 사진 업로드", type=['jpg', 'png', 'jpeg'], key=f"up_{name}")
-                if uploaded:
-                    if save_uploaded_file(uploaded, name):
-                        st.success(f"saved!")
-            with col_u2:
-                # 저장된 사진 미리보기
-                saved_img = load_saved_image(name)
-                if saved_img:
-                    st.image(saved_img, width=50)
-                else:
-                    st.caption("없음")
-
-    # 2. 상단바 디자인
-    with st.expander("⬆️ 상단바 디자인", expanded=False):
-        top_text = st.text_area("상단 문구", "차기 대통령으로\n누구를\n가장 선호하나요?")
-        top_h = st.slider("높이", 50, 400, 250)
-        top_fs = st.slider("글자 크기", 20, 100, 55)
-        top_lh = st.slider("줄 간격", 0, 100, 20, key="tlh")
-        c1, c2 = st.columns(2)
-        top_bg = c1.color_picker("배경색", "#000000", key="tbg")
-        top_color = c2.color_picker("글자색", "#FFFF00", key="tc")
-
-    # 3. 하단바 디자인
-    with st.expander("⬇️ 하단바 디자인", expanded=False):
-        bot_text = st.text_area("하단 문구", "정답을 댓글에 달면 정답을\n알려드립니다!!")
-        bot_h = st.slider("높이", 50, 400, 200, key="bh")
-        bot_fs = st.slider("글자 크기", 20, 100, 40, key="bfs")
-        bot_lh = st.slider("줄 간격", 0, 100, 20, key="blh")
-        c3, c4 = st.columns(2)
-        bot_bg = c3.color_picker("배경색", "#000000", key="bbg")
-        bot_color = c4.color_picker("글자색", "#FFFFFF", key="bc")
-
-    # 4. 이름표 디자인
-    with st.expander("🏷️ 이름표 디자인", expanded=False):
-        label_size = st.slider("이름 크기", 20, 80, 40)
-        c5, c6 = st.columns(2)
-        label_bg = c5.color_picker("배경색", "#FF0000")
-        label_color = c6.color_picker("글자색", "#FFFF00")
-    
-    bg_color = st.color_picker("전체 배경 (빈공간)", "#000000")
-
-    # 디자인 데이터 패킹
-    design = {
-        'bg_color': bg_color,
-        'top_text': top_text, 'top_h': top_h, 'top_fs': top_fs, 'top_lh': top_lh, 'top_bg': top_bg, 'top_color': top_color,
-        'bot_text': bot_text, 'bot_h': bot_h, 'bot_fs': bot_fs, 'bot_lh': bot_lh, 'bot_bg': bot_bg, 'bot_color': bot_color,
-        'label_bg': label_bg, 'label_color': label_color, 'label_size': label_size
-    }
-
-# [오른쪽] 결과물 확인
-with col_right:
-    st.subheader("🖼️ 결과물 확인")
-    
-    if st.button("🚀 이미지 생성 (새로고침)", type="primary", use_container_width=True):
-        st.session_state.gen = True
+        question = random.choice(QUIZ_TEMPLATES).format(name=correct_answer)
         
-    # 이미지 생성 및 표시
-    final_img = create_quiz_image(names, design)
-    st.image(final_img, caption="최종 결과물", use_container_width=True)
+        auto_urls = []
+        for singer in options:
+            url = search_image_auto(singer)
+            auto_urls.append(url)
+        
+        st.session_state['auto_data'] = {
+            'q': question,
+            'names': options,
+            'urls': auto_urls
+        }
+
+# 생성된 데이터가 있으면 화면 표시
+if 'auto_data' in st.session_state:
+    data = st.session_state['auto_data']
     
-    # 다운로드 버튼
-    buf = BytesIO()
-    final_img.save(buf, format="JPEG", quality=100)
-    st.download_button("💾 이미지 다운로드", buf.getvalue(), "shorts_quiz.jpg", "image/jpeg", use_container_width=True)
+    col_l, col_r = st.columns([1, 1.2])
+    
+    with col_l:
+        st.subheader("🛠️ 사진 확인")
+        new_q = st.text_area("질문 멘트", value=data['q'], height=80)
+        final_sources = []
+        
+        for i in range(4):
+            st.markdown(f"**{i+1}번: {data['names'][i]}**")
+            # 이미지가 검색되었으면 보여주고, 아니면 업로드 버튼 표시
+            if data['urls'][i]:
+                st.image(data['urls'][i], width=150)
+                final_sources.append(data['urls'][i])
+            else:
+                st.warning("이미지를 찾지 못했습니다. 직접 올려주세요.")
+                uploaded = st.file_uploader(f"{data['names'][i]} 이미지", key=f"up_{i}")
+                if uploaded: final_sources.append(uploaded)
+                else: final_sources.append(None)
+            st.divider()
+
+    with col_r:
+        st.subheader("📸 최종 결과물")
+        # 4개 소스가 모두 준비되었는지 확인 (None이 섞여있어도 생성은 시도하되 회색박스 처리됨)
+        if st.button("✨ 결과물 다시 그리기", use_container_width=True):
+             pass # 버튼 누르면 리렌더링 효과
+
+        final_img = create_shorts_image(new_q, data['names'], final_sources, use_sketch)
+        st.image(final_img, caption="완성본 (다운로드 가능)", use_container_width=True)
+        
+        # 다운로드 버튼
+        buf = BytesIO()
+        final_img.save(buf, format="JPEG", quality=95)
+        byte_im = buf.getvalue()
+        st.download_button("💾 이미지 다운로드", data=byte_im, file_name="shorts_safe.jpg", mime="image/jpeg", type="primary", use_container_width=True)
