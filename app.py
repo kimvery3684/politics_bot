@@ -1,245 +1,418 @@
-import streamlit as st
-import random
-import requests
-from PIL import Image, ImageDraw, ImageFont
-from io import BytesIO
-import cv2
-import numpy as np
-from duckduckgo_search import DDGS
-
-# --- [1. 기본 설정] ---
-st.set_page_config(page_title="쇼츠 자동 생성기 (저작권 보호 Ver)", page_icon="🛡️", layout="wide")
-
-# --- [2. 비밀번호 보안] ---
-def check_password():
-    if "password_correct" not in st.session_state: st.session_state.password_correct = False
-    if st.session_state.password_correct: return True
-    st.text_input("비밀번호를 입력하세요", type="password", key="password_input", on_change=password_entered)
-    return False
-
-def password_entered():
-    if st.session_state["password_input"] == st.secrets["APP_PASSWORD"]:
-        st.session_state.password_correct = True
-        del st.session_state["password_input"]
-    else: st.error("비밀번호가 틀렸습니다.")
-
-if not check_password(): st.stop()
-
-# --- [3. 데이터 설정] ---
-TROT_SINGERS = [
-    "임영웅","영탁","이찬원","김호중","정동원","장민호","김희재","나훈아","남진","송가인",
-    "장윤정","홍진영","박군","박서진","진성","설운도","태진아","송대관","김연자","주현미",
-    "양지은","전유진","안성훈","박지현","손태진","에녹","신성","민수현","김다현","김태연",
-    "요요미","마이진","린","박구윤","신유","금잔디","조항조","강진","김수희","하춘화",
-    "현숙","문희옥","김혜연","진해성","홍지윤","황영웅","공훈","김중연","박민수","나상도",
-    "최수호","진욱","박성온","정서주","배아현","오유진","미스김","나영","김소연","정슬",
-    "박주희","김수찬","나태주","강혜연","윤수현","조정민","설하윤","류지광","김경민","남승민",
-    "황윤성","강태관","김나희","정미애","홍자","정다경","은가은","별사랑","김의영","황민호",
-    "황민우","이대원","신인선","노지훈","양지원","한강","재하","신승태","최우진","성리",
-    "추혁진","박상철","서주경","한혜진","유지나","김용필","조명섭"
-]
-
-QUIZ_TEMPLATES = [
-    "2025년 트로트 흐름을\n이끌었던 가수는?",
-    "다음 중 '{name}' 님은\n몇 번일까요?",
-    "이 멋진 무대의 주인공,\n'{name}'을 찾아보세요!"
-]
-
-# --- [4. 핵심 기능 함수] ---
-
-# 4-1. 이미지 검색 (DuckDuckGo)
-def search_image_auto(query):
-    """저작권 안전지대인 위키미디어/뉴스 위주로 검색"""
-    try:
-        with DDGS() as ddgs:
-            keywords = [f"{query} wiki image", f"{query} singer performance"]
-            for key in keywords:
-                results = list(ddgs.images(key, max_results=1))
-                if results:
-                    return results[0]['image']
-    except Exception as e:
-        print(f"검색 실패: {e}")
-    return None
-
-# 4-2. 스케치 변환 (OpenCV)
-def convert_to_sketch(pil_image):
-    """사진을 연필 스케치 그림처럼 변환"""
-    img_np = np.array(pil_image)
-    
-    # 컬러 이미지가 아닐 경우 처리
-    if len(img_np.shape) == 2:
-        gray = img_np
-    else:
-        gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
-    
-    inverted = 255 - gray
-    blurred = cv2.GaussianBlur(inverted, (21, 21), 0)
-    inverted_blurred = 255 - blurred
-    
-    # 0으로 나누기 방지
-    sketch = cv2.divide(gray, inverted_blurred, scale=256.0)
-    
-    return Image.fromarray(cv2.cvtColor(sketch, cv2.COLOR_GRAY2RGB))
-
-# 4-3. 폰트 로드 (캐싱 적용)
-@st.cache_resource
-def load_fonts():
-    font_url = "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-ExtraBold.ttf"
-    try:
-        response = requests.get(font_url, timeout=10)
-        return BytesIO(response.content)
-    except Exception as e:
-        st.warning(f"폰트 다운로드 실패 ({e}). 기본 폰트를 사용합니다.")
-        return None
-
-# 4-4. 최종 이미지 합성
-def create_shorts_image(q_text, names, image_sources, use_sketch_filter):
-    # 캔버스 생성 (FHD 세로)
-    canvas = Image.new('RGB', (1080, 1920), (0, 0, 0))
-    draw = ImageDraw.Draw(canvas)
-    
-    # 폰트 설정
-    font_bytes = load_fonts()
-    try:
-        if font_bytes:
-            font_title = ImageFont.truetype(font_bytes, 100)
-            font_name = ImageFont.truetype(font_bytes, 70)
-        else:
-            raise Exception("Font load failed")
-    except:
-        font_title = ImageFont.load_default()
-        font_name = ImageFont.load_default()
-
-    # 제목 그리기 (중앙 정렬 계산)
-    bbox = draw.textbbox((0, 0), q_text, font=font_title)
-    text_w = bbox[2] - bbox[0]
-    draw.text(((1080 - text_w) / 2, 150), q_text, font=font_title, fill="#FFFF00", align="center")
-
-    # 이미지 배치 좌표 (2x2 격자)
-    positions = [(50, 500), (560, 500), (50, 1100), (560, 1100)]
-    size = (470, 550)
-
-    for i, (name, source, pos) in enumerate(zip(names, image_sources, positions)):
-        img = None
-        try:
-            # 소스 타입에 따라 이미지 로드
-            if source is None:
-                pass
-            elif isinstance(source, BytesIO): # 직접 업로드
-                img = Image.open(source).convert("RGB")
-            elif isinstance(source, str) and source.startswith("http"): # 검색 URL
-                response = requests.get(source, timeout=5)
-                img = Image.open(BytesIO(response.content)).convert("RGB")
-            
-            if img:
-                # 스케치 필터 적용
-                if use_sketch_filter:
-                    img = convert_to_sketch(img)
-
-                # 크롭 및 리사이즈 (비율 유지)
-                img_ratio = img.width / img.height
-                target_ratio = size[0] / size[1]
-                
-                if img_ratio > target_ratio:
-                    new_width = int(img.height * target_ratio)
-                    offset = (img.width - new_width) // 2
-                    img = img.crop((offset, 0, offset + new_width, img.height))
-                else:
-                    new_height = int(img.width / target_ratio)
-                    offset = (img.height - new_height) // 2
-                    img = img.crop((0, offset, img.width, offset + new_height))
-                
-                img = img.resize(size, Image.LANCZOS)
-        except Exception as e:
-            print(f"이미지 처리 중 오류: {e}")
-            img = None
-
-        # 이미지 로드 실패 시 회색 박스
-        if img is None:
-            img = Image.new('RGB', size, (50, 50, 50))
-            
-        canvas.paste(img, pos)
-
-        # 이름표 달기
-        tag_w, tag_h = 300, 120
-        tag_x = pos[0] + (size[0] - tag_w) // 2
-        tag_y = pos[1] + size[1] - (tag_h // 2)
-        
-        draw.rounded_rectangle([tag_x, tag_y, tag_x + tag_w, tag_y + tag_h], radius=20, fill="black", outline="#00FF00", width=3)
-        
-        # 이름 중앙 정렬
-        bbox_name = draw.textbbox((0, 0), name, font=font_name)
-        name_w = bbox_name[2] - bbox_name[0]
-        name_h = bbox_name[3] - bbox_name[1]
-        draw.text((tag_x + (tag_w - name_w) / 2, tag_y + (tag_h - name_h) / 2 - 10), name, font=font_name, fill="#00FF00")
-
-    return canvas
-
-# --- [5. 메인 UI] ---
-st.title("🛡️ 쇼츠 자동 생성기 (저작권 회피 모드)")
-st.markdown("이미지를 **'스케치 그림'**처럼 변환하여 저작권/초상권 위험을 줄입니다.")
-
-# 사이드바 설정
-with st.sidebar:
-    st.header("⚙️ 안전 설정")
-    use_sketch = st.checkbox("🎨 스케치 필터 적용 (추천)", value=True, help="사진을 그림처럼 바꿔서 저작권 봇을 피합니다.")
-
-# 버튼 클릭 시 퀴즈 생성
-if st.button("🚀 퀴즈 & 이미지 자동 생성", type="primary", use_container_width=True):
-    with st.spinner("🤖 저작권 안전지대에서 사진을 찾는 중..."):
-        correct_answer = random.choice(TROT_SINGERS)
-        wrong_answers = random.sample([s for s in TROT_SINGERS if s != correct_answer], 3)
-        options = wrong_answers + [correct_answer]
-        random.shuffle(options)
-        
-        question = random.choice(QUIZ_TEMPLATES).format(name=correct_answer)
-        
-        auto_urls = []
-        for singer in options:
-            url = search_image_auto(singer)
-            auto_urls.append(url)
-        
-        st.session_state['auto_data'] = {
-            'q': question,
-            'names': options,
-            'urls': auto_urls
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>정치인 퀴즈 생성기 - Admin</title>
+    <style>
+        :root {
+            --primary-red: #ff4d4d;
+            --bg-gray: #f4f6f8;
+            --panel-width: 350px;
+        }
+        * { box-sizing: border-box; outline: none; }
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Pretendard', sans-serif;
+            background-color: var(--bg-gray);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
         }
 
-# 생성된 데이터가 있으면 화면 표시
-if 'auto_data' in st.session_state:
-    data = st.session_state['auto_data']
-    
-    col_l, col_r = st.columns([1, 1.2])
-    
-    with col_l:
-        st.subheader("🛠️ 사진 확인")
-        new_q = st.text_area("질문 멘트", value=data['q'], height=80)
-        final_sources = []
-        
-        for i in range(4):
-            st.markdown(f"**{i+1}번: {data['names'][i]}**")
-            # 이미지가 검색되었으면 보여주고, 아니면 업로드 버튼 표시
-            if data['urls'][i]:
-                st.image(data['urls'][i], width=150)
-                final_sources.append(data['urls'][i])
-            else:
-                st.warning("이미지를 찾지 못했습니다. 직접 올려주세요.")
-                uploaded = st.file_uploader(f"{data['names'][i]} 이미지", key=f"up_{i}")
-                if uploaded: final_sources.append(uploaded)
-                else: final_sources.append(None)
-            st.divider()
+        /* [Left Sidebar - Design & Layout] */
+        aside {
+            width: var(--panel-width);
+            background: #fff;
+            border-right: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.05);
+            z-index: 10;
+        }
 
-    with col_r:
-        st.subheader("📸 최종 결과물")
-        # 4개 소스가 모두 준비되었는지 확인 (None이 섞여있어도 생성은 시도하되 회색박스 처리됨)
-        if st.button("✨ 결과물 다시 그리기", use_container_width=True):
-             pass # 버튼 누르면 리렌더링 효과
+        .panel-header {
+            font-size: 1.2rem;
+            font-weight: 800;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
 
-        final_img = create_shorts_image(new_q, data['names'], final_sources, use_sketch)
-        st.image(final_img, caption="완성본 (다운로드 가능)", use_container_width=True)
+        /* Tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #eee;
+            margin-bottom: 20px;
+        }
+        .tab {
+            flex: 1;
+            text-align: center;
+            padding: 10px 0;
+            font-size: 0.9rem;
+            color: #888;
+            cursor: pointer;
+            position: relative;
+        }
+        .tab.active {
+            color: var(--primary-red);
+            font-weight: 700;
+        }
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background-color: var(--primary-red);
+        }
+
+        /* Controls */
+        .control-group {
+            margin-bottom: 25px;
+        }
+        .control-label {
+            font-size: 0.85rem;
+            color: #555;
+            margin-bottom: 10px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+        }
+        .val-display { color: var(--primary-red); font-size: 0.8rem; }
         
-        # 다운로드 버튼
-        buf = BytesIO()
-        final_img.save(buf, format="JPEG", quality=95)
-        byte_im = buf.getvalue()
-        st.download_button("💾 이미지 다운로드", data=byte_im, file_name="shorts_safe.jpg", mime="image/jpeg", type="primary", use_container_width=True)
+        input[type="range"] {
+            width: 100%;
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: var(--primary-red);
+            cursor: pointer;
+            margin-top: -6px;
+        }
+        input[type="range"]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            background: #ddd;
+            border-radius: 2px;
+        }
+
+        .color-picker-row {
+            display: flex;
+            gap: 10px;
+        }
+        .color-box {
+            width: 30px; height: 30px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            cursor: pointer;
+        }
+
+        /* [Right Content - Preview] */
+        main {
+            flex: 1;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-y: auto;
+        }
+
+        .toolbar {
+            width: 100%;
+            max-width: 900px;
+            background: #fff;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .btn {
+            padding: 8px 16px;
+            border: 1px solid #ddd;
+            background: #fff;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.2s;
+        }
+        .btn:hover { background: #f0f0f0; }
+        .btn-red { background: var(--primary-red); color: white; border: none; }
+        .btn-red:hover { background: #e04444; }
+
+        /* Preview Area (Phone Scale) */
+        .preview-container {
+            width: 360px; /* Mobile width */
+            height: 640px; /* Mobile height */
+            background-color: #000;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 30px rgba(0,0,0,0.3);
+            border-radius: 20px;
+            border: 8px solid #333;
+        }
+
+        /* Dynamic Elements */
+        #preview-title {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            color: #ffd700; /* Default yellow */
+            font-weight: 900;
+            z-index: 10;
+            padding: 0 10px;
+            line-height: 1.3;
+        }
+        
+        .grid-container {
+            position: absolute;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 10px;
+            width: 90%;
+            left: 5%;
+        }
+
+        .p-card {
+            background: #222;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+        .p-img {
+            flex: 1;
+            background-color: #555;
+            overflow: hidden;
+        }
+        .p-img img { width: 100%; height: 100%; object-fit: cover; }
+        .p-name {
+            background: #000;
+            color: #fff;
+            text-align: center;
+            padding: 5px 0;
+            font-weight: bold;
+            border-top: 2px solid #ffd700;
+        }
+
+        .guide-box {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            color: #1565c0;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+
+    <aside>
+        <div class="panel-header">
+            🎨 디자인 & 레이아웃
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('layout')">위치/배치</div>
+            <div class="tab" onclick="switchTab('style')">색상/크기</div>
+            <div class="tab" onclick="switchTab('text')">문구</div>
+        </div>
+
+        <div class="guide-box">
+            💡 여기서 위치와 크기를 조절하세요. <br>실시간으로 우측 화면에 반영됩니다.
+        </div>
+
+        <div id="tab-layout" class="tab-content">
+            <div class="control-group">
+                <div class="control-label">질문 위치 (Y좌표) <span class="val-display" id="val-title-y">10%</span></div>
+                <input type="range" id="input-title-y" min="0" max="90" value="10" oninput="updatePreview()">
+            </div>
+            
+            <div class="control-group">
+                <div class="control-label">사진 뭉치 위치 (Y좌표) <span class="val-display" id="val-grid-y">30%</span></div>
+                <input type="range" id="input-grid-y" min="0" max="90" value="30" oninput="updatePreview()">
+            </div>
+
+            <div class="control-group">
+                <div class="control-label">사진 뭉치 너비 <span class="val-display" id="val-grid-w">90%</span></div>
+                <input type="range" id="input-grid-w" min="50" max="100" value="90" oninput="updatePreview()">
+            </div>
+        </div>
+
+        <div id="tab-style" class="tab-content" style="display:none;">
+             <div class="control-group">
+                <div class="control-label">질문 폰트 크기 <span class="val-display" id="val-font-s">24px</span></div>
+                <input type="range" id="input-font-s" min="14" max="60" value="24" oninput="updatePreview()">
+            </div>
+            <div class="control-group">
+                <div class="control-label">테두리 색상</div>
+                <div class="color-picker-row">
+                    <div class="color-box" style="background:#ffd700" onclick="changeBorder('#ffd700')"></div>
+                    <div class="color-box" style="background:#ff00ff" onclick="changeBorder('#ff00ff')"></div>
+                    <div class="color-box" style="background:#00ffff" onclick="changeBorder('#00ffff')"></div>
+                    <div class="color-box" style="background:#ffffff" onclick="changeBorder('#ffffff')"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-text" class="tab-content" style="display:none;">
+            <div class="control-group">
+                <div class="control-label">상단 문구 내용</div>
+                <textarea id="input-title-text" rows="4" style="width:100%; border:1px solid #ddd; padding:10px; border-radius:4px;" oninput="updatePreview()">역대급 내로남불! 남이 하면 불륜, 내가 하면 로맨스인 자는?</textarea>
+            </div>
+        </div>
+    </aside>
+
+    <main>
+        <div class="toolbar">
+            <strong>🔥 데이터 소스:</strong>
+            <button class="btn" onclick="loadCandidates('ruling')">🔴 여당 (국힘)</button>
+            <button class="btn" onclick="loadCandidates('opposition')">🔵 야당 (민주/조국)</button>
+            <button class="btn" onclick="loadCandidates('vip')">👑 VIP (대통령)</button>
+            <div style="flex-grow:1"></div>
+            <button class="btn btn-red">🚀 퀴즈 이미지 생성</button>
+        </div>
+
+        <div class="preview-container">
+            <h1 id="preview-title">역대급 내로남불! 남이 하면 불륜, 내가 하면 로맨스인 자는?</h1>
+            
+            <div class="grid-container" id="preview-grid">
+                <div class="p-card"><div class="p-img"></div><div class="p-name">1. 후보</div></div>
+                <div class="p-card"><div class="p-img"></div><div class="p-name">2. 후보</div></div>
+                <div class="p-card"><div class="p-img"></div><div class="p-name">3. 후보</div></div>
+                <div class="p-card"><div class="p-img"></div><div class="p-name">4. 후보</div></div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // [Data: Political Figures for High Traffic]
+        const data = {
+            vip: [
+                { name: "윤석열", party: "대통령" },
+                { name: "김건희", party: "영부인" }
+            ],
+            ruling: [ // People Power Party & Key Figures (25)
+                "한동훈", "오세훈", "홍준표", "안철수", "나경원", 
+                "원희룡", "추경호", "배현진", "권성동", "장제원", 
+                "김기현", "윤상현", "김재섭", "조정훈", "인요한",
+                "김은혜", "박수영", "성일종", "김웅", "박정훈",
+                "이상민", "윤희숙", "김민전", "김용태", "유승민"
+            ].map(name => ({ name, party: "국민의힘" })),
+            
+            opposition: [ // Democratic Party & Opposition Block (25)
+                "이재명", "조국", "추미애", "정청래", "박찬대",
+                "고민정", "이준석", "천하람", "김남국", "최강욱",
+                "김민석", "서영교", "장경태", "박지원", "정동영",
+                "박용진", "김동연", "김경수", "임종석", "우상호",
+                "이낙연", "김두관", "양문석", "김준혁", "이언주"
+            ].map(name => ({ name, party: "야권" }))
+        };
+
+        // [Logic: Tab Switching]
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+            document.getElementById('tab-' + tabName).style.display = 'block';
+        }
+
+        // [Logic: Live Preview Update]
+        function updatePreview() {
+            // Get Values
+            const titleY = document.getElementById('input-title-y').value;
+            const gridY = document.getElementById('input-grid-y').value;
+            const gridW = document.getElementById('input-grid-w').value;
+            const fontS = document.getElementById('input-font-s').value;
+            const titleText = document.getElementById('input-title-text').value;
+
+            // Apply Values
+            const titleEl = document.getElementById('preview-title');
+            const gridEl = document.getElementById('preview-grid');
+
+            // Text
+            titleEl.innerText = titleText;
+            titleEl.style.top = titleY + '%';
+            titleEl.style.fontSize = fontS + 'px';
+
+            // Grid
+            gridEl.style.top = gridY + '%';
+            gridEl.style.width = gridW + '%';
+            gridEl.style.left = ((100 - gridW) / 2) + '%'; // Center align
+            
+            // Labels
+            document.getElementById('val-title-y').innerText = titleY + '%';
+            document.getElementById('val-grid-y').innerText = gridY + '%';
+            document.getElementById('val-grid-w').innerText = gridW + '%';
+            document.getElementById('val-font-s').innerText = fontS + 'px';
+        }
+
+        function changeBorder(color) {
+            const cards = document.querySelectorAll('.p-name');
+            cards.forEach(card => {
+                card.style.borderTopColor = color;
+                card.style.color = color === '#ffffff' ? '#000' : color;
+                if(color === '#ffffff') card.style.background = '#fff';
+                else card.style.background = '#000';
+            });
+            document.getElementById('preview-title').style.color = color;
+        }
+
+        // [Logic: Load Candidates]
+        function loadCandidates(type) {
+            let pool = [];
+            if (type === 'vip') {
+                pool = data.vip;
+                // VIP는 2명이므로 나머지 2명은 랜덤 채움
+                const extras = [...data.ruling, ...data.opposition].sort(() => 0.5 - Math.random()).slice(0, 2);
+                pool = [...pool, ...extras];
+            } else {
+                pool = data[type].sort(() => 0.5 - Math.random()).slice(0, 4);
+            }
+
+            const gridEl = document.getElementById('preview-grid');
+            gridEl.innerHTML = ''; // Clear
+
+            pool.forEach((person, index) => {
+                const imgUrl = `https://via.placeholder.com/150/333/fff?text=${encodeURIComponent(person.name)}`;
+                
+                const html = `
+                    <div class="p-card">
+                        <div class="p-img">
+                            <img src="${imgUrl}" alt="${person.name}">
+                        </div>
+                        <div class="p-name" style="border-top-color: #ffd700">
+                            ${index + 1}. ${person.name}
+                        </div>
+                    </div>
+                `;
+                gridEl.innerHTML += html;
+            });
+            
+            // Re-apply current border style
+            updatePreview(); 
+        }
+
+        // Init
+        loadCandidates('ruling');
+        updatePreview();
+
+    </script>
+</body>
+</html>
