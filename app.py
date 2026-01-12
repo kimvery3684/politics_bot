@@ -5,7 +5,7 @@ import os
 # --- [1. 기본 설정 및 영구 저장소 만들기] ---
 st.set_page_config(page_title="JJ 쇼츠 마스터 (영구저장)", page_icon="🏛️", layout="wide")
 
-# 폰트 설정
+# 폰트 설정 (같은 폴더에 폰트 파일이 있어야 함)
 FONT_FILE = "NanumGothic-ExtraBold.ttf"
 
 # 📁 [핵심] 사진을 저장할 폴더 만들기 (없으면 생성)
@@ -59,7 +59,6 @@ def create_quiz_image(names, d):
     try:
         bbox = draw.textbbox((0, 0), d['top_text'], font=font_top, spacing=d['top_lh'])
         w = bbox[2] - bbox[0]
-        h = bbox[3] - bbox[1] # 높이 계산
         
         # 박스 정중앙 배치
         draw.text(
@@ -147,7 +146,7 @@ def create_quiz_image(names, d):
     return canvas
 
 # --- [4. 메인 UI] ---
-st.title("🏛️ 정치/인물 퀴즈 (영구저장됨)")
+st.title("🏛️ 정치/인물 퀴즈 (영부인/배우자 편)")
 
 col_left, col_right = st.columns([1, 1.2])
 
@@ -157,8 +156,8 @@ with col_left:
     
     # 1. 인물 등록 섹션
     with st.expander("📸 인물 사진 등록 (영구 저장)", expanded=True):
-        # 4명의 인물 이름 입력
-        names_input = st.text_input("인물 이름 4명 (쉼표로 구분)", "이재명, 한동훈, 조국, 이준석")
+        # [수정됨] 요청하신 인물들로 기본값 변경
+        names_input = st.text_input("인물 이름 4명 (쉼표로 구분)", "김건희, 김정숙, 김혜경, 이순자")
         names = [n.strip() for n in names_input.split(',')]
         
         # 4개로 갯수 맞추기
@@ -173,7 +172,7 @@ with col_left:
                 uploaded = st.file_uploader(f"'{name}' 사진 업로드", type=['jpg', 'png', 'jpeg'], key=f"up_{name}")
                 if uploaded:
                     if save_uploaded_file(uploaded, name):
-                        st.success(f"saved!")
+                        st.success(f"저장됨!")
             with col_u2:
                 # 저장된 사진 미리보기
                 saved_img = load_saved_image(name)
@@ -184,7 +183,8 @@ with col_left:
 
     # 2. 상단바 디자인
     with st.expander("⬆️ 상단바 디자인", expanded=False):
-        top_text = st.text_area("상단 문구", "차기 대통령으로\n누구를\n가장 선호하나요?")
+        # [수정됨] 상단 멘트 예시 변경
+        top_text = st.text_area("상단 문구", "역대 영부인/배우자 중\n누구를\n가장 선호하나요?")
         top_h = st.slider("높이", 50, 400, 250)
         top_fs = st.slider("글자 크기", 20, 100, 55)
         top_lh = st.slider("줄 간격", 0, 100, 20, key="tlh")
