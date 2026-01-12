@@ -38,6 +38,7 @@ QUESTION_LIST = [
 ]
 
 # [2] 세션 상태 초기화
+# session_state에는 오직 '실존하는 인물 이름'만 저장합니다. ('?' 포함 X)
 if 'candidates' not in st.session_state:
     st.session_state.candidates = ["한동훈", "이재명", "조국", "이준석"]
 if 'question' not in st.session_state:
@@ -91,34 +92,29 @@ with st.container(border=True):
                 st.session_state.candidates = DATA['vip'] + others
                 
         else: # 직접 선택
+            # [수정 포인트] default 값에서 혹시 모를 '?'나 명단에 없는 값 제거하여 에러 방지
+            valid_defaults = [c for c in st.session_state.candidates if c in ALL_CANDIDATES]
+            
             selected = st.multiselect(
                 "명단에서 4명을 선택하세요", 
                 ALL_CANDIDATES, 
-                default=st.session_state.candidates[:4],
+                default=valid_defaults[:4], # 유효한 값만 기본값으로 설정
                 max_selections=4
             )
-            # 선택값이 변경되면 즉시 반영
-            if selected:
-                st.session_state.candidates = selected
-            
-            # 빈칸 처리 (미리보기 깨짐 방지)
-            while len(st.session_state.candidates) < 4:
-                 st.session_state.candidates.append("?")
+            # 사용자가 선택을 변경하면 세션 상태 업데이트
+            st.session_state.candidates = selected
 
 
-    # --- 우측: 질문 선택 (업그레이드 된 부분) ---
+    # --- 우측: 질문 선택 ---
     with col2:
         st.markdown("#### 💬 질문 선택")
-        # 라디오 버튼 옵션 추가: 목록 선택
         q_mode = st.radio("질문 선택 방식", ["목록 선택", "직접 입력", "랜덤 뽑기"], horizontal=True, key="q_mode")
         
         if q_mode == "목록 선택":
-            # 전체 질문 리스트를 selectbox로 제공
             selected_q = st.selectbox("질문 목록에서 선택하세요 👇", QUESTION_LIST)
             st.session_state.question = selected_q
             
         elif q_mode == "직접 입력":
-            # 사용자 직접 입력
             user_q = st.text_input("원하는 질문을 입력하세요 ✏️", value=st.session_state.question)
             st.session_state.question = user_q
             
@@ -133,11 +129,10 @@ st.button("🚀 퀴즈 이미지 생성 (다운로드)", type="primary", use_con
 
 st.subheader("🔥 미리보기")
 
-# HTML/CSS 생성 로직
-display_cands = st.session_state.candidates[:]
-# 4명 미만일 경우 처리
-if len(display_cands) < 4:
-    display_cands += ["?"] * (4 - len(display_cands))
+# [수정 포인트] 화면에 보여줄 때만 '?'를 채워넣습니다. (DB 저장 X)
+display_cands = st.session_state.candidates[:] # 복사본 생성
+while len(display_cands) < 4:
+    display_cands.append("?")
 
 html_code = f"""
 <!DOCTYPE html>
