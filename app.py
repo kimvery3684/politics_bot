@@ -23,24 +23,27 @@ DATA = {
 # 전체 명단 통합 (검색/직접 선택용)
 ALL_CANDIDATES = DATA['vip'] + DATA['ruling'] + DATA['opposition']
 
-# 랜덤 질문 리스트 (매운맛)
-RANDOM_QUESTIONS = [
+# 🌶️ 매운맛 질문 리스트 (전체 목록)
+QUESTION_LIST = [
     "역대급 내로남불! 남이 하면 불륜, 내가 하면 로맨스인 자는?",
     "지금 당장 정계 은퇴해야 할 사람은?",
     "다음 대통령으로 절대 뽑히면 안 될 사람은?",
     "말만 번지르르하고 실속은 하나도 없는 사람은?",
     "밥값 못하고 세금만 축내는 월급 루팡은?",
     "무인도에 딱 한 명만 데려간다면 누구?",
-    "가장 믿음이 안 가는 관상은?"
+    "가장 믿음이 안 가는 관상은?",
+    "학창시절에 친구 괴롭혔을 것 같은 사람은?",
+    "솔직히 일 제일 잘한다고 생각하는 사람은?",
+    "나라를 망칠 것 같은 위험한 인물은?"
 ]
 
-# [2] 세션 상태 초기화 (새로고침 해도 값 유지)
+# [2] 세션 상태 초기화
 if 'candidates' not in st.session_state:
-    st.session_state.candidates = ["한동훈", "이재명", "조국", "이준석"] # 기본값
+    st.session_state.candidates = ["한동훈", "이재명", "조국", "이준석"]
 if 'question' not in st.session_state:
-    st.session_state.question = RANDOM_QUESTIONS[0]
+    st.session_state.question = QUESTION_LIST[0]
 
-# [3] 사이드바 - 디자인 & 레이아웃 (스크린샷 스타일 반영)
+# [3] 사이드바 - 디자인 & 레이아웃
 with st.sidebar:
     st.header("🎨 디자인 & 레이아웃")
     
@@ -62,21 +65,20 @@ with st.sidebar:
         grid_w = st.slider("사진 뭉치 너비", 50, 100, 90)
 
     with tab_text:
-        st.info("메인 화면에서 질문을 직접 입력하거나 랜덤으로 선택할 수 있습니다.")
+        st.info("메인 화면에서 질문을 선택하거나 직접 입력하세요.")
 
 # [4] 메인 화면 - 퀴즈 생성 컨트롤러
 st.title("🎵 정치 숏츠 생성기 (매운맛🔥)")
 
-# 컨테이너 박스로 영역 구분
 with st.container(border=True):
-    st.subheader("퀴즈 생성")
+    st.subheader("퀴즈 생성 설정")
     
     col1, col2 = st.columns(2)
     
     # --- 좌측: 인물 구성 ---
     with col1:
-        st.markdown("**인물 구성**")
-        cand_mode = st.radio("인물 선택 방식", ["랜덤", "직접 (최대 4명)"], horizontal=True, key="cand_mode_radio")
+        st.markdown("#### 👥 인물 구성")
+        cand_mode = st.radio("인물 선택 방식", ["랜덤", "직접 (최대 4명)"], horizontal=True, key="cand_mode")
         
         if cand_mode == "랜덤":
             c_btn1, c_btn2, c_btn3 = st.columns(3)
@@ -95,24 +97,35 @@ with st.container(border=True):
                 default=st.session_state.candidates[:4],
                 max_selections=4
             )
-            if len(selected) > 0:
+            # 선택값이 변경되면 즉시 반영
+            if selected:
                 st.session_state.candidates = selected
-                # 4명이 안 되면 빈칸 채우기 (에러 방지)
-                while len(st.session_state.candidates) < 4:
-                    st.session_state.candidates.append("?")
+            
+            # 빈칸 처리 (미리보기 깨짐 방지)
+            while len(st.session_state.candidates) < 4:
+                 st.session_state.candidates.append("?")
 
-    # --- 우측: 질문 선택 ---
+
+    # --- 우측: 질문 선택 (업그레이드 된 부분) ---
     with col2:
-        st.markdown("**질문 선택**")
-        q_mode = st.radio("질문 선택 방식", ["랜덤", "직접"], horizontal=True, key="q_mode_radio")
+        st.markdown("#### 💬 질문 선택")
+        # 라디오 버튼 옵션 추가: 목록 선택
+        q_mode = st.radio("질문 선택 방식", ["목록 선택", "직접 입력", "랜덤 뽑기"], horizontal=True, key="q_mode")
         
-        if q_mode == "랜덤":
-            if st.button("🎲 질문 뽑기 (클릭)"):
-                st.session_state.question = random.choice(RANDOM_QUESTIONS)
-            st.info(f"선택된 질문: {st.session_state.question}")
-        else:
-            user_q = st.text_input("질문을 입력하세요", value=st.session_state.question)
+        if q_mode == "목록 선택":
+            # 전체 질문 리스트를 selectbox로 제공
+            selected_q = st.selectbox("질문 목록에서 선택하세요 👇", QUESTION_LIST)
+            st.session_state.question = selected_q
+            
+        elif q_mode == "직접 입력":
+            # 사용자 직접 입력
+            user_q = st.text_input("원하는 질문을 입력하세요 ✏️", value=st.session_state.question)
             st.session_state.question = user_q
+            
+        elif q_mode == "랜덤 뽑기":
+            if st.button("🎲 운에 맡기기 (질문 뽑기)"):
+                st.session_state.question = random.choice(QUESTION_LIST)
+            st.info(f"현재 질문: {st.session_state.question}")
 
 # [5] 미리보기 및 생성 버튼
 st.divider()
@@ -121,9 +134,10 @@ st.button("🚀 퀴즈 이미지 생성 (다운로드)", type="primary", use_con
 st.subheader("🔥 미리보기")
 
 # HTML/CSS 생성 로직
-display_cands = st.session_state.candidates
+display_cands = st.session_state.candidates[:]
 # 4명 미만일 경우 처리
-final_cands = display_cands + ["?"] * (4 - len(display_cands))
+if len(display_cands) < 4:
+    display_cands += ["?"] * (4 - len(display_cands))
 
 html_code = f"""
 <!DOCTYPE html>
@@ -197,20 +211,20 @@ html_code = f"""
         <div class="title">{st.session_state.question}</div>
         <div class="grid-container">
             <div class="card">
-                <div class="img-box"><img src="https://via.placeholder.com/150/333/fff?text={final_cands[0]}" /></div>
-                <div class="name-tag"><span class="number">1</span>{final_cands[0]}</div>
+                <div class="img-box"><img src="https://via.placeholder.com/150/333/fff?text={display_cands[0]}" /></div>
+                <div class="name-tag"><span class="number">1</span>{display_cands[0]}</div>
             </div>
             <div class="card">
-                <div class="img-box"><img src="https://via.placeholder.com/150/333/fff?text={final_cands[1]}" /></div>
-                <div class="name-tag"><span class="number">2</span>{final_cands[1]}</div>
+                <div class="img-box"><img src="https://via.placeholder.com/150/333/fff?text={display_cands[1]}" /></div>
+                <div class="name-tag"><span class="number">2</span>{display_cands[1]}</div>
             </div>
             <div class="card">
-                <div class="img-box"><img src="https://via.placeholder.com/150/333/fff?text={final_cands[2]}" /></div>
-                <div class="name-tag"><span class="number">3</span>{final_cands[2]}</div>
+                <div class="img-box"><img src="https://via.placeholder.com/150/333/fff?text={display_cands[2]}" /></div>
+                <div class="name-tag"><span class="number">3</span>{display_cands[2]}</div>
             </div>
             <div class="card">
-                <div class="img-box"><img src="https://via.placeholder.com/150/333/fff?text={final_cands[3]}" /></div>
-                <div class="name-tag"><span class="number">4</span>{final_cands[3]}</div>
+                <div class="img-box"><img src="https://via.placeholder.com/150/333/fff?text={display_cands[3]}" /></div>
+                <div class="name-tag"><span class="number">4</span>{display_cands[3]}</div>
             </div>
         </div>
     </div>
@@ -218,5 +232,4 @@ html_code = f"""
 </html>
 """
 
-# 미리보기 출력
 components.html(html_code, height=620)
