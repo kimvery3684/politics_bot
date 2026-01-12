@@ -1,7 +1,6 @@
 import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
 import os
-from io import BytesIO  # <--- [중요] 이게 있어야 다운로드가 됩니다!
 
 # --- [1. 기본 설정 및 영구 저장소 만들기] ---
 st.set_page_config(page_title="JJ 쇼츠 마스터 (영구저장)", page_icon="🏛️", layout="wide")
@@ -58,6 +57,11 @@ def create_quiz_image(names, d):
     
     # 상단 텍스트 (줄간격 적용)
     try:
+        bbox = draw.textbbox((0, 0), d['top_text'], font=font_top, spacing=d['top_lh'])
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1] # 높이 계산
+        
+        # 박스 정중앙 배치
         draw.text(
             (540, d['top_h'] / 2), 
             d['top_text'], 
@@ -84,10 +88,7 @@ def create_quiz_image(names, d):
         (0, grid_start_y + cell_h), (cell_w, grid_start_y + cell_h) # 2행
     ]
 
-    # 입력된 이름 중 상위 4명만 사용
-    target_names = names[:4]
-
-    for i, (name, pos) in enumerate(zip(target_names, positions)):
+    for i, (name, pos) in enumerate(zip(names, positions)):
         # 1. 저장된 이미지 불러오기
         img = load_saved_image(name)
         
@@ -156,28 +157,20 @@ with col_left:
     
     # 1. 인물 등록 섹션
     with st.expander("📸 인물 사진 등록 (영구 저장)", expanded=True):
-        st.caption("※ 목록의 맨 앞 4명만 이미지에 표시됩니다. 순서를 바꾸거나 지워주세요.")
+        # 4명의 인물 이름 입력
+        names_input = st.text_input("인물 이름 4명 (쉼표로 구분)", "이재명, 한동훈, 조국, 이준석")
+        names = [n.strip() for n in names_input.split(',')]
         
-        # [수정] 8명 전체 명단을 기본값으로 설정 (입력하기 편하게 text_area로 변경)
-        default_names = "이재명, 한동훈, 조국, 이준석, 김건희, 김정숙, 김혜경, 이순자"
-        names_input = st.text_area("인물 목록 (콤마로 구분)", default_names)
-        
-        names = [n.strip() for n in names_input.split(',') if n.strip()]
-        
-        # 4개로 갯수 맞추기 (최소 4명 확보)
+        # 4개로 갯수 맞추기
         while len(names) < 4: names.append(f"인물 {len(names)+1}")
-        
-        # 실제 퀴즈에 쓰일 상위 4명
-        target_names = names[:4]
+        names = names[:4]
 
-        # 각 인물별 파일 업로더 생성 (상위 4명만 표시)
+        # 각 인물별 파일 업로더 생성
         st.write("---")
-        st.write(f"👇 **현재 선택된 4명: {', '.join(target_names)}**")
-        
-        for name in target_names:
+        for name in names:
             col_u1, col_u2 = st.columns([3, 1])
             with col_u1:
-                uploaded = st.file_uploader(f"'{name}' 사진", type=['jpg', 'png', 'jpeg'], key=f"up_{name}")
+                uploaded = st.file_uploader(f"'{name}' 사진 업로드", type=['jpg', 'png', 'jpeg'], key=f"up_{name}")
                 if uploaded:
                     if save_uploaded_file(uploaded, name):
                         st.success(f"saved!")
@@ -233,7 +226,7 @@ with col_right:
     if st.button("🚀 이미지 생성 (새로고침)", type="primary", use_container_width=True):
         st.session_state.gen = True
         
-    # 이미지 생성 및 표시 (전체 명단을 넘기면 내부에서 4명만 자름)
+    # 이미지 생성 및 표시
     final_img = create_quiz_image(names, design)
     st.image(final_img, caption="최종 결과물", use_container_width=True)
     
