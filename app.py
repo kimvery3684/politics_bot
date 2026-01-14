@@ -1,199 +1,199 @@
 import streamlit as st
-import random
-import streamlit.components.v1 as components
+from PIL import Image, ImageDraw, ImageFont
 import os
-import base64
+from io import BytesIO
 
-# [1] 기본 설정 및 데이터
-st.set_page_config(page_title="정치인 짤 생성기", layout="wide")
+# --- [1. 기본 설정 및 영구 저장소] ---
+st.set_page_config(page_title="JJ 쇼츠 마스터 (디자인 정밀조절)", page_icon="🎨", layout="wide")
 
-# 이미지 저장 경로 설정
-IMAGE_DIR = "saved_images"
-if not os.path.exists(IMAGE_DIR):
-    os.makedirs(IMAGE_DIR)
+FONT_FILE = "NanumGothic-ExtraBold.ttf"
+SAVE_DIR = "saved_images"
+if not os.path.exists(SAVE_DIR):
+    os.makedirs(SAVE_DIR)
 
-# 정치인 데이터베이스 (총 52명)
-DATA = {
-    "vip": ["윤석열", "김건희"],
-    "ruling": [ # 여당 25인
-        "한동훈", "오세훈", "홍준표", "안철수", "나경원", "원희룡", "추경호", "배현진", "권성동", "장제원",
-        "김기현", "윤상현", "김재섭", "조정훈", "인요한", "김은혜", "박수영", "성일종", "김웅", "박정훈",
-        "이상민", "윤희숙", "김민전", "김용태", "유승민"
-    ],
-    "opposition": [ # 야당 25인
-        "이재명", "조국", "추미애", "정청래", "박찬대", "고민정", "이준석", "천하람", "김남국", "최강욱",
-        "김민석", "서영교", "장경태", "박지원", "정동영", "박용진", "김동연", "김경수", "임종석", "우상호",
-        "이낙연", "김두관", "양문석", "김준혁", "이언주"
-    ]
-}
-
-# 전체 명단 통합
-ALL_CANDIDATES = sorted(DATA['vip'] + DATA['ruling'] + DATA['opposition'])
-
-# 질문 리스트
-QUESTION_LIST = [
-    "역대급 내로남불! 남이 하면 불륜, 내가 하면 로맨스인 자는?",
-    "지금 당장 정계 은퇴해야 할 사람은?",
-    "다음 대통령으로 절대 뽑히면 안 될 사람은?",
-    "말만 번지르르하고 실속은 하나도 없는 사람은?",
-    "밥값 못하고 세금만 축내는 월급 루팡은?",
-    "무인도에 딱 한 명만 데려간다면 누구?",
-    "가장 믿음이 안 가는 관상은?",
-    "학창시절에 친구 괴롭혔을 것 같은 사람은?",
-    "솔직히 일 제일 잘한다고 생각하는 사람은?",
-    "나라를 망칠 것 같은 위험한 인물은?"
-]
-
-# [2] 헬퍼 함수: 이미지 처리 (Base64 변환)
-def get_image_src(name):
-    for ext in ['png', 'jpg', 'jpeg']:
-        file_path = os.path.join(IMAGE_DIR, f"{name}.{ext}")
-        if os.path.exists(file_path):
-            with open(file_path, "rb") as f:
-                data = f.read()
-                encoded = base64.b64encode(data).decode()
-                return f"data:image/{ext};base64,{encoded}"
-    return f"https://via.placeholder.com/150/333/fff?text={name}"
+# --- [2. 기능 함수] ---
+def get_font(size):
+    if os.path.exists(FONT_FILE):
+        return ImageFont.truetype(FONT_FILE, size)
+    else:
+        return ImageFont.load_default()
 
 def save_uploaded_file(uploaded_file, name):
     if uploaded_file is not None:
-        file_ext = uploaded_file.name.split('.')[-1].lower()
-        if file_ext not in ['png', 'jpg', 'jpeg']:
-            file_ext = 'png'
-        save_path = os.path.join(IMAGE_DIR, f"{name}.{file_ext}")
-        with open(save_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        return True
+        try:
+            image = Image.open(uploaded_file).convert("RGB")
+            save_path = os.path.join(SAVE_DIR, f"{name}.jpg")
+            image.save(save_path, quality=95)
+            return True
+        except: return False
     return False
 
-# [3] 세션 상태 초기화
-if 'candidates' not in st.session_state:
-    st.session_state.candidates = ["한동훈", "이재명", "조국", "이준석"]
-if 'question' not in st.session_state:
-    st.session_state.question = QUESTION_LIST[0]
+def load_saved_image(name):
+    path = os.path.join(SAVE_DIR, f"{name}.jpg")
+    if os.path.exists(path):
+        return Image.open(path).convert("RGB")
+    return None
 
-# [4] 사이드바 - 디자인 & 레이아웃
-with st.sidebar:
-    st.header("🎨 디자인 & 레이아웃")
-    tab_style, tab_pos, tab_text = st.tabs(["색상/크기", "위치/배치", "문구"])
+# --- [3. 이미지 생성 엔진 (줌 기능 추가)] ---
+def create_quiz_image(names, d):
+    canvas = Image.new('RGB', (1080, 1920), d['bg_color'])
+    draw = ImageDraw.Draw(canvas)
     
-    with tab_style:
-        bg_color = st.color_picker("배경색", "#000000")
-        text_color = st.color_picker("질문 텍스트 색상", "#FFD700")
-        border_color = st.color_picker("테두리/이름 색상", "#FFD700")
-        font_size = st.slider("질문 크기", 20, 60, 28)
+    font_top = get_font(d['top_fs'])
+    font_bot = get_font(d['bot_fs'])
+    font_label = get_font(d['label_fs'])
+
+    # === [A. 상단 바] ===
+    draw.rectangle([(0, 0), (1080, d['top_h'])], fill=d['top_bg'])
+    try:
+        draw.text((540, d['top_h'] / 2), d['top_text'], font=font_top, fill=d['top_color'], anchor="mm", align="center", spacing=d['top_lh'])
+    except: pass
+
+    # === [B. 중앙 그리드 & 사진] ===
+    grid_start_y = d['top_h']
+    grid_end_y = 1920 - d['bot_h']
+    grid_height = grid_end_y - grid_start_y
+    
+    cell_w = 1080 // 2
+    cell_h = grid_height // 2
+    
+    positions = [
+        (0, grid_start_y), (cell_w, grid_start_y),
+        (0, grid_start_y + cell_h), (cell_w, grid_start_y + cell_h)
+    ]
+
+    target_names = names[:4]
+
+    for i, (name, pos) in enumerate(zip(target_names, positions)):
+        img = load_saved_image(name)
+        if img is None:
+            img = Image.new('RGB', (cell_w, cell_h), (50, 50, 50))
+            ImageDraw.Draw(img).text((cell_w/2, cell_h/2), "사진 없음", font=get_font(40), fill="white", anchor="mm")
         
-    with tab_pos:
-        title_y = st.slider("질문 위치 (Y축)", 0, 50, 10)
-        grid_y = st.slider("사진 뭉치 위치 (Y축)", 10, 80, 25)
-        grid_w = st.slider("사진 뭉치 너비", 50, 100, 90)
-
-    with tab_text:
-        st.caption("사진 등록 탭에서 인물 사진을 추가하면 자동으로 반영됩니다.")
-
-# [5] 메인 화면
-st.title("🎵 정치 숏츠 생성기 (매운맛🔥)")
-main_tab1, main_tab2 = st.tabs(["📸 사진 등록/관리", "🚀 퀴즈 만들기"])
-
-# --- TAB 1: 사진 등록 ---
-with main_tab1:
-    st.subheader("가수(정치인) 사진 영구 저장")
-    col_reg1, col_reg2 = st.columns([1, 2])
-    with col_reg1:
-        target_person = st.selectbox("사진을 등록할 인물을 선택하세요", ALL_CANDIDATES)
-        uploaded_file = st.file_uploader(f"'{target_person}' 사진 업로드", type=['png', 'jpg', 'jpeg'])
-        if uploaded_file:
-            if save_uploaded_file(uploaded_file, target_person):
-                st.success(f"✅ {target_person} 사진 저장 완료!")
-                st.rerun()
-    with col_reg2:
-        st.write(f"**현재 저장된 '{target_person}' 사진**")
-        img_src = get_image_src(target_person)
-        st.image(img_src if "data:image" in img_src else "https://via.placeholder.com/150", width=300)
-
-# --- TAB 2: 퀴즈 만들기 ---
-with main_tab2:
-    with st.container(border=True):
-        st.subheader("퀴즈 생성 설정")
-        col1, col2 = st.columns(2)
+        # [NEW] 이미지 줌(확대/축소) 로직 적용
+        zoom = d['img_zoom']
         
-        # [인물 구성]
-        with col1:
-            st.markdown("#### 👥 인물 구성")
-            cand_mode = st.radio("인물 선택 방식", ["랜덤", "직접 (최대 4명)"], horizontal=True)
-            if cand_mode == "랜덤":
-                c_btn1, c_btn2, c_btn3 = st.columns(3)
-                if c_btn1.button("🔴 여당 랜덤"):
-                    st.session_state.candidates = random.sample(DATA['ruling'], 4)
-                if c_btn2.button("🔵 야당 랜덤"):
-                    st.session_state.candidates = random.sample(DATA['opposition'], 4)
-                if c_btn3.button("👑 VIP 포함"):
-                    others = random.sample(DATA['ruling'] + DATA['opposition'], 2)
-                    st.session_state.candidates = DATA['vip'] + others
-            else:
-                valid_defaults = [c for c in st.session_state.candidates if c in ALL_CANDIDATES]
-                selected = st.multiselect("명단에서 4명을 선택하세요", ALL_CANDIDATES, default=valid_defaults[:4], max_selections=4)
-                st.session_state.candidates = selected
+        # 1. 기본 Center Crop 계산
+        img_ratio = img.width / img.height
+        target_ratio = cell_w / cell_h
+        
+        if img_ratio > target_ratio:
+            new_width = int(img.height * target_ratio)
+            crop_x = (img.width - new_width) // 2
+            img_cropped = img.crop((crop_x, 0, crop_x + new_width, img.height))
+        else:
+            new_height = int(img.width / target_ratio)
+            crop_y = (img.height - new_height) // 2
+            img_cropped = img.crop((0, crop_y, img.width, crop_y + new_height))
 
-        # [질문 선택] - 여기가 수정된 핵심 부분입니다!
-        with col2:
-            st.markdown("#### 💬 질문 선택")
-            q_mode = st.radio("질문 선택 방식", ["목록 선택", "직접 입력", "랜덤 뽑기"], horizontal=True)
+        # 2. 줌 적용 (Zoom In/Out)
+        if zoom != 1.0:
+            w, h = img_cropped.size
+            # 줌 인 (>1.0): 이미지를 잘라냄 (Crop center)
+            if zoom > 1.0:
+                crop_w = int(w / zoom)
+                crop_h = int(h / zoom)
+                cx, cy = w // 2, h // 2
+                img_cropped = img_cropped.crop((cx - crop_w//2, cy - crop_h//2, cx + crop_w//2, cy + crop_h//2))
+            # 줌 아웃 (<1.0): 여백을 둠 (이건 복잡해서 일단 원본 비율 유지 리사이즈로 처리)
+            # 여기서는 편의상 확대 기능 위주로 구현 (축소 시 검은 여백 생기는 것 방지)
             
-            if q_mode == "목록 선택":
-                # 드롭다운 (Selectbox)
-                st.session_state.question = st.selectbox("질문 목록에서 선택 👇", QUESTION_LIST)
-                
-            elif q_mode == "직접 입력":
-                # 텍스트 입력창 (Text Input) - 자유롭게 수정 가능
-                # value에 현재 질문을 넣어두어 수정하기 편하게 함
-                user_input = st.text_input("질문을 자유롭게 입력하세요 ✏️", value=st.session_state.question)
-                st.session_state.question = user_input
-                
-            elif q_mode == "랜덤 뽑기":
-                if st.button("🎲 질문 뽑기"):
-                    st.session_state.question = random.choice(QUESTION_LIST)
-                st.info(f"선택된 질문: {st.session_state.question}")
+        img_final = img_cropped.resize((cell_w, cell_h), Image.LANCZOS)
+        canvas.paste(img_final, pos)
+        
+        # [NEW] 이름표 높이 조절
+        label_h = d['label_h']
+        label_y = pos[1] + cell_h - label_h
+        
+        # 이름표 배경 & 글자
+        draw.rectangle([pos[0], label_y, pos[0]+cell_w, pos[1]+cell_h], fill=d['label_bg'])
+        draw.text((pos[0] + cell_w/2, label_y + label_h/2), f"{i+1}. {name}", font=font_label, fill=d['label_color'], anchor="mm")
+        
+        # 테두리
+        draw.rectangle([pos[0], pos[1], pos[0]+cell_w, pos[1]+cell_h], outline="black", width=2)
 
-    st.divider()
+    # === [C. 하단 바] ===
+    draw.rectangle([(0, 1920 - d['bot_h']), (1080, 1920)], fill=d['bot_bg'])
+    try:
+        draw.text((540, 1920 - (d['bot_h'] / 2)), d['bot_text'], font=font_bot, fill=d['bot_color'], anchor="mm", align="center", spacing=d['bot_lh'])
+    except: pass
+
+    return canvas
+
+# --- [4. 메인 UI] ---
+st.title("🎨 쇼츠 이미지 생성기 (디자인 강화판)")
+
+col_L, col_R = st.columns([1, 1.3])
+
+with col_L:
+    with st.expander("📸 인물 목록 & 사진 등록", expanded=True):
+        default_names = "이재명, 한동훈, 조국, 이준석, 김건희, 김정숙, 김혜경, 이순자"
+        names_input = st.text_area("인물 목록 (상위 4명 적용)", default_names, height=80)
+        
+        all_names = [n.strip() for n in names_input.split(',') if n.strip()]
+        while len(all_names) < 4: all_names.append(f"인물 {len(all_names)+1}")
+        target_names = all_names[:4]
+
+        st.write(f"👇 **현재 선택: {', '.join(target_names)}**")
+        for name in target_names:
+            c1, c2 = st.columns([3,1])
+            with c1:
+                f = st.file_uploader(f"'{name}' 사진", type=['jpg','png','jpeg'], key=f"u_{name}")
+                if f: save_uploaded_file(f, name)
+            with c2:
+                img = load_saved_image(name)
+                if img: st.image(img, width=50)
+
+    # === [디자인 조절 패널] ===
+    st.header("🎚️ 디자인 세부 조절")
     
-    # 미리보기 생성
-    display_cands = st.session_state.candidates[:]
-    while len(display_cands) < 4:
-        display_cands.append("?")
+    with st.expander("1. 상단 바 (Top Bar)", expanded=False):
+        top_text = st.text_area("상단 문구", "차기 대통령으로\n누구를\n가장 선호하나요?")
+        top_h = st.slider("상단 높이", 50, 500, 250)
+        top_fs = st.slider("상단 글자 크기", 20, 150, 55)
+        top_lh = st.slider("상단 줄간격", 0, 100, 20)
+        c1, c2 = st.columns(2)
+        top_bg = c1.color_picker("배경색", "#000000", key="tb")
+        top_color = c2.color_picker("글자색", "#FFFF00", key="tc")
 
-    img_srcs = [get_image_src(c) if c != "?" else "https://via.placeholder.com/150/333/fff?text=?" for c in display_cands]
+    with st.expander("2. 사진 & 이름표 (Photo & Name)", expanded=True):
+        st.markdown("### 🖼️ 사진 조절")
+        img_zoom = st.slider("사진 확대/축소 (배율)", 1.0, 2.0, 1.0, 0.1, help="1.0은 원본, 숫자를 키우면 얼굴이 확대됩니다.")
+        
+        st.markdown("### 🏷️ 이름표 조절")
+        label_h = st.slider("이름표 높이(두께)", 30, 200, 70)
+        label_fs = st.slider("이름 글자 크기", 20, 100, 40)
+        c3, c4 = st.columns(2)
+        label_bg = c3.color_picker("이름표 배경", "#FF0000", key="lb")
+        label_color = c4.color_picker("이름표 글자", "#FFFF00", key="lc")
 
-    html_code = f"""
-    <!DOCTYPE html>
-    <html lang="ko">
-    <head>
-    <style>
-        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
-        body {{ margin: 0; padding: 0; background-color: {bg_color}; font-family: 'Pretendard', sans-serif; display: flex; justify-content: center; align-items: center; height: 600px; overflow: hidden; }}
-        .phone-frame {{ width: 360px; height: 600px; background-color: {bg_color}; position: relative; border: 1px solid #333; box-shadow: 0 0 20px rgba(0,0,0,0.5); }}
-        .title {{ position: absolute; top: {title_y}%; width: 100%; text-align: center; color: {text_color}; font-size: {font_size}px; font-weight: 900; line-height: 1.3; z-index: 10; padding: 0 15px; box-sizing: border-box; word-break: keep-all; }}
-        .grid-container {{ position: absolute; top: {grid_y}%; left: {(100 - grid_w) / 2}%; width: {grid_w}%; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }}
-        .card {{ background: #222; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; border: 1px solid #444; }}
-        .img-box {{ width: 100%; padding-top: 100%; position: relative; background: #333; }}
-        .img-box img {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }}
-        .name-tag {{ background: #000; color: {border_color}; text-align: center; padding: 8px 0; font-weight: 700; border-top: 3px solid {border_color}; font-size: 18px; }}
-        .number {{ color: #fff; margin-right: 5px; }}
-    </style>
-    </head>
-    <body>
-        <div class="phone-frame">
-            <div class="title">{st.session_state.question}</div>
-            <div class="grid-container">
-                <div class="card"><div class="img-box"><img src="{img_srcs[0]}"></div><div class="name-tag"><span class="number">1</span>{display_cands[0]}</div></div>
-                <div class="card"><div class="img-box"><img src="{img_srcs[1]}"></div><div class="name-tag"><span class="number">2</span>{display_cands[1]}</div></div>
-                <div class="card"><div class="img-box"><img src="{img_srcs[2]}"></div><div class="name-tag"><span class="number">3</span>{display_cands[2]}</div></div>
-                <div class="card"><div class="img-box"><img src="{img_srcs[3]}"></div><div class="name-tag"><span class="number">4</span>{display_cands[3]}</div></div>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-    st.subheader("🔥 미리보기")
-    components.html(html_code, height=620)
-    st.button("🚀 퀴즈 이미지 생성 (다운로드)", type="primary", use_container_width=True)
+    with st.expander("3. 하단 바 (Bottom Bar)", expanded=False):
+        bot_text = st.text_area("하단 문구", "정답을 댓글에 달면 정답을\n알려드립니다!!")
+        bot_h = st.slider("하단 높이", 50, 500, 200)
+        bot_fs = st.slider("하단 글자 크기", 20, 150, 40)
+        bot_lh = st.slider("하단 줄간격", 0, 100, 20)
+        c5, c6 = st.columns(2)
+        bot_bg = c5.color_picker("배경색", "#000000", key="bb")
+        bot_color = c6.color_picker("글자색", "#FFFFFF", key="bc")
+
+    bg_color = st.color_picker("전체 배경 (빈공간)", "#000000")
+
+    design = {
+        'bg_color': bg_color,
+        'top_text': top_text, 'top_h': top_h, 'top_fs': top_fs, 'top_lh': top_lh, 'top_bg': top_bg, 'top_color': top_color,
+        'bot_text': bot_text, 'bot_h': bot_h, 'bot_fs': bot_fs, 'bot_lh': bot_lh, 'bot_bg': bot_bg, 'bot_color': bot_color,
+        'label_h': label_h, 'label_fs': label_fs, 'label_bg': label_bg, 'label_color': label_color,
+        'img_zoom': img_zoom # 줌 데이터 추가
+    }
+
+with col_R:
+    st.subheader("🖼️ 미리보기")
+    if st.button("🔄 이미지 생성 (적용)", type="primary", use_container_width=True):
+        st.session_state.gen = True
+        
+    final_img = create_quiz_image(all_names, design)
+    st.image(final_img, caption="최종 결과물", use_container_width=True)
+    
+    buf = BytesIO()
+    final_img.save(buf, format="JPEG", quality=100)
+    st.download_button("💾 이미지 다운로드", buf.getvalue(), "shorts_quiz.jpg", "image/jpeg", use_container_width=True)
