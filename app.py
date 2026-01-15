@@ -5,7 +5,7 @@ import random
 from io import BytesIO
 
 # --- [1. 기본 설정] ---
-st.set_page_config(page_title="JJ 쇼츠 마스터 1호점 (매운맛)", page_icon="🔥", layout="wide")
+st.set_page_config(page_title="JJ 쇼츠 마스터 1호점 (디자인강화)", page_icon="🔥", layout="wide")
 
 FONT_FILE = "NanumGothic-ExtraBold.ttf"
 SAVE_DIR = "saved_images"
@@ -14,7 +14,7 @@ if not os.path.exists(SAVE_DIR):
 
 # --- [2. 노딱 방지 & 댓글 폭발 부정 질문 30선] ---
 VIRAL_QUESTIONS = [
-    # 😡 섹션 1: 무능/책임론 (가장 안전하면서 분노 유발)
+    # 😡 섹션 1: 무능/책임론
     "국가 발전을 가로막는\n가장 큰 걸림돌은?",
     "세금이 가장 아깝다고\n생각되는 인물은?",
     "밥값 못하고 자리만\n차지하는 사람은?",
@@ -23,7 +23,7 @@ VIRAL_QUESTIONS = [
     "대한민국 정치를\n후퇴시키는 주범은?",
     "말만 번지르르하고\n성과는 없는 사람은?",
     
-    # 🤥 섹션 2: 위선/거짓말 (내로남불 자극)
+    # 🤥 섹션 2: 위선/거짓말
     "앞뒤가 가장 다른\n내로남불의 화신은?",
     "선거 때와 딴판으로\n말 바꾼 사람은?",
     "가장 뻔뻔하게\n거짓말하는 인물은?",
@@ -32,7 +32,7 @@ VIRAL_QUESTIONS = [
     "자신의 이익만 챙기는\n이기적인 인물은?",
     "사과할 줄 모르는\n오만한 태도의 인물은?",
     
-    # 🛑 섹션 3: 심판/은퇴 (강력한 행동 촉구)
+    # 🛑 섹션 3: 심판/은퇴
     "정계 은퇴가 시급한\n0순위는 누구?",
     "다음 선거에서\n절대 뽑으면 안 될 사람은?",
     "당장 사퇴해야\n마땅한 사람은?",
@@ -41,7 +41,7 @@ VIRAL_QUESTIONS = [
     "역대 최악의\n정치인 1위는?",
     "절대 용서할 수 없는\n과오를 저지른 사람은?",
     
-    # ⚔️ 섹션 4: 배신/갈등 (팬덤 자극)
+    # ⚔️ 섹션 4: 배신/갈등
     "우리를 가장\n실망시킨 배신자는?",
     "내부 총질로\n팀을 망치는 사람은?",
     "가장 억지 주장을\n펼치는 사람은?",
@@ -88,7 +88,10 @@ def create_quiz_image(target_names, d):
     # 상단 바
     draw.rectangle([(0, 0), (1080, d['top_h'])], fill=d['top_bg'])
     try:
-        draw.text((540, d['top_h'] / 2), d['top_text'], font=font_top, fill=d['top_color'], anchor="mm", align="center", spacing=d['top_lh'])
+        # 상단 텍스트 위치 계산 (중앙 + 사용자 지정 오프셋)
+        text_x = 540
+        text_y = (d['top_h'] / 2) + d['top_y_adj']
+        draw.text((text_x, text_y), d['top_text'], font=font_top, fill=d['top_color'], anchor="mm", align="center", spacing=d['top_lh'])
     except: pass
 
     # 중앙 그리드
@@ -132,12 +135,15 @@ def create_quiz_image(target_names, d):
     # 하단 바
     draw.rectangle([(0, 1920 - d['bot_h']), (1080, 1920)], fill=d['bot_bg'])
     try:
-        draw.text((540, 1920 - (d['bot_h'] / 2)), d['bot_text'], font=font_bot, fill=d['bot_color'], anchor="mm", align="center", spacing=d['bot_lh'])
+        # 하단 텍스트 위치 계산 (중앙 + 사용자 지정 오프셋)
+        bot_text_x = 540
+        bot_text_y = (1920 - (d['bot_h'] / 2)) + d['bot_y_adj']
+        draw.text((bot_text_x, bot_text_y), d['bot_text'], font=font_bot, fill=d['bot_color'], anchor="mm", align="center", spacing=d['bot_lh'])
     except: pass
     return canvas
 
 # --- [5. 메인 UI] ---
-st.title("🔥 1호점: 논쟁 유발 쇼츠 생성기")
+st.title("🔥 1호점: 매운맛 쇼츠 생성기 (정밀조절)")
 col_L, col_R = st.columns([1, 1.3])
 
 with col_L:
@@ -153,66 +159,75 @@ with col_L:
             sel = st.multiselect("4명 선택", ALL_NAMES, default=st.session_state.c_names[:4])
             if len(sel) == 4: st.session_state.c_names = sel
         
-        st.write("---")
         # 사진 등록
-        cols = st.columns(4)
-        for i, name in enumerate(st.session_state.c_names):
-            with cols[i]:
-                img = load_saved_image(name)
-                if img: st.image(img, caption=name, use_container_width=True)
-                else: st.caption(f"{name}\n(없음)")
-        
-        with st.popover("📸 사진 업로드 하기"):
+        st.write("---")
+        with st.popover("📸 사진 업로드 및 관리"):
             for name in st.session_state.c_names:
                 f = st.file_uploader(f"{name} 사진", type=['jpg','png','jpeg'], key=f"u_{name}")
                 if f: save_uploaded_file(f, name)
+            st.info("등록된 사진은 'saved_images' 폴더에 자동 저장됩니다.")
 
-    # 2. 질문(멘트) 설정 - 핵심 기능
-    st.header("💬 질문 설정 (조회수 폭발)")
+    # 2. 질문(멘트) 설정
+    st.header("💬 질문 설정")
     with st.container(border=True):
         if 'q_text' not in st.session_state: st.session_state.q_text = VIRAL_QUESTIONS[0]
         
         c_q1, c_q2 = st.columns([1, 1])
         with c_q1:
-            if st.button("🎲 질문 랜덤 돌리기", type="primary", use_container_width=True):
+            if st.button("🎲 질문 랜덤", type="primary", use_container_width=True):
                 st.session_state.q_text = random.choice(VIRAL_QUESTIONS)
         with c_q2:
-            selected_q = st.selectbox("목록에서 고르기", VIRAL_QUESTIONS, index=VIRAL_QUESTIONS.index(st.session_state.q_text) if st.session_state.q_text in VIRAL_QUESTIONS else 0)
+            selected_q = st.selectbox("목록 선택", VIRAL_QUESTIONS, index=VIRAL_QUESTIONS.index(st.session_state.q_text) if st.session_state.q_text in VIRAL_QUESTIONS else 0)
             if selected_q != st.session_state.q_text:
                 st.session_state.q_text = selected_q
 
-        top_text = st.text_area("상단 문구 수정", st.session_state.q_text, height=100)
+        top_text = st.text_area("상단 문구 수정", st.session_state.q_text, height=80)
     
-    # 3. 디자인 정밀 조절
-    with st.expander("🎨 디자인 상세 설정"):
-        t_tab, p_tab, b_tab = st.tabs(["상단", "사진/이름", "하단"])
-        with t_tab:
-            top_h = st.slider("높이", 50, 600, 400, key="th")
-            top_fs = st.slider("글자 크기", 20, 150, 65, key="tfs")
-            top_lh = st.slider("줄간격", 0, 100, 20, key="tlh")
-            c1, c2 = st.columns(2)
-            top_bg = c1.color_picker("배경", "#000000", key="tbg")
-            top_color = c2.color_picker("글자", "#FFFF00", key="tc")
-        with p_tab:
-            img_zoom = st.slider("사진 확대", 1.0, 3.0, 1.0, 0.1)
-            label_h = st.slider("이름표 높이", 30, 200, 80)
-            label_fs = st.slider("이름 글자", 20, 100, 45)
-            c3, c4 = st.columns(2)
-            label_bg = c3.color_picker("배경", "#FF0000", key="lbg")
-            label_color = c4.color_picker("글자", "#FFFF00", key="lc")
-        with b_tab:
-            bot_text = st.text_area("하단 문구", "정답을 댓글에 달면 정답을\n알려드립니다!!")
-            bot_h = st.slider("높이", 50, 600, 350, key="bh")
-            bot_fs = st.slider("글자 크기", 20, 150, 40, key="bfs")
-            c5, c6 = st.columns(2)
-            bot_bg = c5.color_picker("배경", "#000000", key="bbg")
-            bot_color = c6.color_picker("글자", "#FFFFFF", key="bc")
+    # 3. 디자인 정밀 조절 (핵심 요청 사항)
+    st.header("🎨 디자인 초정밀 설정")
+    
+    with st.expander("⬆️ 상단 바 (Top Bar) 설정", expanded=True):
+        col_t1, col_t2 = st.columns(2)
+        with col_t1:
+            top_h = st.slider("배경 높이", 100, 600, 400, help="검은색 배경의 높이를 조절합니다.")
+            top_bg = st.color_picker("배경색", "#000000", key="tbg")
+        with col_t2:
+            top_fs = st.slider("글자 크기", 20, 150, 65)
+            top_color = st.color_picker("글자색", "#FF0000", key="tc") # 매운맛이라 기본 빨강
+        
+        st.markdown("---")
+        st.markdown("**👇 위치 & 간격 미세조절**")
+        top_lh = st.slider("행간 (줄 간격)", 0, 150, 20, help="글자가 여러 줄일 때 줄 사이 간격입니다.")
+        top_y_adj = st.slider("글자 위치 (위/아래 이동)", -200, 200, 0, help="양수(+)면 아래로, 음수(-)면 위로 움직입니다. 사진과의 간격을 조절하세요.")
+
+    with st.expander("⬇️ 하단 바 (Bottom Bar) 설정", expanded=False):
+        bot_text = st.text_area("하단 문구", "인물을 두번 톡톡 누르고,\n댓글 남겨주세요!!")
+        col_b1, col_b2 = st.columns(2)
+        with col_b1:
+            bot_h = st.slider("배경 높이", 100, 600, 350, key="bh")
+            bot_bg = st.color_picker("배경색", "#000000", key="bbg")
+        with col_b2:
+            bot_fs = st.slider("글자 크기", 20, 150, 45, key="bfs")
+            bot_color = st.color_picker("글자색", "#FFFF00", key="bc")
+        
+        st.markdown("---")
+        bot_lh = st.slider("행간 (줄 간격)", 0, 150, 20, key="blh")
+        bot_y_adj = st.slider("글자 위치 (위/아래 이동)", -200, 200, 0, key="bya", help="글자를 위로 올리면 사진과 가까워집니다.")
+
+    with st.expander("🖼️ 사진 & 이름표 설정", expanded=False):
+        img_zoom = st.slider("사진 확대", 1.0, 3.0, 1.0, 0.1)
+        label_h = st.slider("이름표 높이", 30, 200, 80)
+        label_fs = st.slider("이름 글자 크기", 20, 100, 45)
+        c3, c4 = st.columns(2)
+        label_bg = c3.color_picker("이름표 배경", "#FF0000", key="lbg")
+        label_color = c4.color_picker("이름표 글자", "#FFFF00", key="lc")
             
-    bg_color = st.color_picker("전체 배경", "#000000")
+    bg_color = st.color_picker("전체 배경 (빈공간)", "#000000")
 
     design = {
-        'bg_color': bg_color, 'top_text': top_text, 'top_h': top_h, 'top_fs': top_fs, 'top_lh': top_lh, 'top_bg': top_bg, 'top_color': top_color,
-        'bot_text': bot_text, 'bot_h': bot_h, 'bot_fs': bot_fs, 'bot_lh': 20, 'bot_bg': bot_bg, 'bot_color': bot_color,
+        'bg_color': bg_color, 
+        'top_text': top_text, 'top_h': top_h, 'top_fs': top_fs, 'top_lh': top_lh, 'top_y_adj': top_y_adj, 'top_bg': top_bg, 'top_color': top_color,
+        'bot_text': bot_text, 'bot_h': bot_h, 'bot_fs': bot_fs, 'bot_lh': bot_lh, 'bot_y_adj': bot_y_adj, 'bot_bg': bot_bg, 'bot_color': bot_color,
         'label_h': label_h, 'label_fs': label_fs, 'label_bg': label_bg, 'label_color': label_color, 'img_zoom': img_zoom
     }
 
@@ -222,4 +237,4 @@ with col_R:
     st.image(final_img, use_container_width=True)
     buf = BytesIO()
     final_img.save(buf, format="JPEG", quality=100)
-    st.download_button("💾 이미지 다운로드", buf.getvalue(), "shorts_negative_safe.jpg", "image/jpeg", use_container_width=True)
+    st.download_button("💾 이미지 다운로드", buf.getvalue(), "shorts_spicy.jpg", "image/jpeg", use_container_width=True)
