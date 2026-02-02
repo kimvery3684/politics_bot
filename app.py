@@ -5,53 +5,63 @@ import random
 from io import BytesIO
 
 # --- [1. 기본 설정] ---
-st.set_page_config(page_title="JJ 쇼츠 마스터 1호점 (최신판)", page_icon="🔥", layout="wide")
+st.set_page_config(page_title="JJ 쇼츠 마스터 1호점 (Clean Ver)", page_icon="🔥", layout="wide")
 
 FONT_FILE = "NanumGothic-ExtraBold.ttf"
 SAVE_DIR = "saved_images"
 if not os.path.exists(SAVE_DIR):
     os.makedirs(SAVE_DIR)
 
-# --- [2. 멘트 데이터베이스 (정치/논쟁 전용)] ---
+# --- [2. 멘트 데이터베이스 (줄바꿈 제거됨)] ---
 VIRAL_QUESTIONS = [
-    # 🏆 능력치 대결
-    "대한민국 최고의\n'경제 대통령'은 누구?",
-    "전쟁 났을 때 나를 지켜줄\n'안보 사령관'은?",
-    "말빨 하나는 타고났다!\n역대 최고의 '토론왕'은?",
-    "위기 상황에서 가장\n침착할 것 같은 리더는?",
-    "해외 순방 보냈을 때\n가장 든든한 사람은?",
-    "가장 억울하게\n저평가된 정치인은?",
-    "추진력 하나는 탱크 같다!\n최고의 '불도저'는?",
-    "서민의 삶을 가장\n잘 이해하는 사람은?",
-    "참모들을 가장 잘 챙길\n'의리파' 형님은?",
-    "통일이 된다면,\n초대 통일 대통령 감은?",
+    # 🩸 생존/본능
+    "당장 전쟁 나면 내 목숨, 누구한테 맡기겠습니까?",
+    "국가 부도 위기! 지옥에서 우릴 구할 사람은?",
+    "무인도에 딱 한 명 데려간다면, 누굴 데려가시겠습니까?",
+    "내 전 재산을 믿고 맡길 가장 정직한 사람은?",
+    "밤길 마주치면 가장 무서울 것 같은 눈빛은?",
 
-    # 🥊 라이벌 매치
-    "지금 대선 토론 붙으면\n누가 이길까?",
-    "차기 보수(우파)의\n진정한 주인은 누구?",
-    "민주당(좌파) 차기 대권,\n이재명 다음은 누구?",
-    "젊은 패기 대결!\n대한민국 정치의 미래는?",
-    "다시 붙는다면?\n역대급 리매치 승자는?",
-    "가장 강력한 팬덤을\n가진 사람은?",
-    "술자리에서 이길 것 같은\n사람은 누구?",
-    "가장 무서운\n'독설가'는 누구?",
-    "유튜버 하면\n대박 날 것 같은 사람은?",
-    "내 자식의\n담임 선생님이었으면?",
+    # 💔 감성/후회
+    "지금 생각해보니, 그때가 천국이었다?",
+    "가장 억울하게 욕먹은, 비운의 정치인은?",
+    "가장 믿었기에, 가장 뼈아프게 배신한 사람은?",
+    "타임머신 타고 가서, 반드시 말리고 싶은 사람은?",
+    "술 한잔 따라주며 위로해주고 싶은 사람은?",
+
+    # 🎭 풍자/팩폭
+    "정치 안 하고 배우 했으면 대박 났을 '연기 대상'은?",
+    "입만 열면 빵 터진다! 최고의 '개그맨'은?",
+    "얼굴에 철판 깔았다! 뻔뻔함 1티어는 누구?",
+    "주변에 간신배가 가장 많았던 사람은?",
+    "가장 '쇼(Show)'를 기가 막히게 잘한다고 생각하는 사람은?",
+
+    # 🥊 능력치 비교
+    "트럼프랑 맞짱 떠도 안 꿀릴 '협상의 신'은?",
+    "추진력 하나는 불도저! 일 머리 최고인 사람은?",
+    "말빨로 제압한다! 역대 최강 '토론 싸움꾼'은?",
+    "멍청한 참모들 데리고 혼자 하드캐리한 사람은?",
+    "부하 직원들이 가장 존경했을 것 같은 리더는?",
+
+    # 🔮 미래/가정
+    "다시 투표한다면, 절대 안 뽑을 사람은?",
+    "만약 통일 대통령이 나온다면, 누가 가장 적임자인가?",
+    "100년 뒤 역사책에서 가장 칭송받을 위인은?",
+    "다음 대선, 이 사람 나오면 무조건 찍는다?",
+    "은퇴하고 유튜버 하면 구독자 100만 찍을 사람은?",
 
     # 💣 매운맛 밸런스
-    "가장 '쇼(Show)'를\n잘한다고 생각하는 사람은?",
-    "정치 안 하고 연예인 했으면\n더 성공했을 관상은?",
-    "다시는 정치판에\n얼씬도 말았으면?",
-    "국가 발전을 가로막는\n가장 큰 걸림돌은?",
-    "세금이 가장 아깝다고\n생각되는 인물은?",
-    "밥값 못하고 자리만\n차지하는 사람은?",
-    "앞뒤가 가장 다른\n내로남불의 화신은?"
+    "세금이 가장 아깝다! 월급 압수하고 싶은 사람은?",
+    "가장 '내로남불'이 심했다고 생각하는 인물은?",
+    "자식 교육을 가장 잘못 시켰다고 생각하는 분은?",
+    "깨끗한 척했지만 알고 보니 아니었던 사람은?",
+    "제발 정계 은퇴해라! 꼴도 보기 싫은 사람은?"
 ]
 
 # --- [3. DB 데이터] ---
 DB_PRESIDENTS = ["윤석열", "문재인", "박근혜", "이명박", "노무현", "김대중", "김영삼", "노태우", "전두환", "박정희", "이승만"]
 DB_POLITICIANS = ["이재명", "한동훈", "조국", "이준석", "홍준표", "오세훈", "안철수", "추미애", "김동연", "나경원", "원희룡", "김기현", "정청래", "고민정"]
-ALL_NAMES = sorted(list(set(DB_PRESIDENTS + DB_POLITICIANS)))
+DB_BUSINESS = ["이재용", "정의선", "김승연", "최태원"]
+ALL_NAMES = sorted(list(set(DB_PRESIDENTS + DB_POLITICIANS + DB_BUSINESS)))
 
 # --- [4. 기능 함수들] ---
 def get_font(size):
@@ -93,7 +103,7 @@ def create_quiz_image(content_list, d):
             current_y += d['top_fs'] + d['top_lh']
     except: pass
 
-    # 그리드
+    # 중앙 그리드
     grid_start_y = d['top_h']
     grid_end_y = 1920 - d['bot_h']
     grid_height = grid_end_y - grid_start_y
@@ -139,16 +149,16 @@ def create_quiz_image(content_list, d):
     return canvas
 
 # --- [5. 메인 UI] ---
-st.title("🔥 1호점: 매운맛 (트래픽 폭발 질문 탑재)")
+st.title("🔥 1호점: 매운맛 (줄바꿈 자유 버전)")
 col_L, col_R = st.columns([1, 1.3])
 
 with col_L:
     st.header("1. 인물 구성")
-    mode = st.radio("모드 선택", ["🎲 DB 랜덤", "✅ DB 선택", "🛠️ 완전 자유 입력"], index=2, horizontal=True)
+    mode = st.radio("모드 선택", ["🎲 DB 랜덤", "✅ DB 선택", "🛠️ 완전 자유 입력(추천)"], index=2, horizontal=True)
 
     final_content = []
 
-    if mode == "🛠️ 완전 자유 입력":
+    if mode == "🛠️ 완전 자유 입력(추천)":
         st.info("원하는 이름과 사진을 4개 순서대로 넣으세요.")
         for i in range(4):
             with st.container(border=True):
@@ -190,7 +200,8 @@ with col_L:
             selected_q = st.selectbox("질문 목록", VIRAL_QUESTIONS, index=0)
             if selected_q != VIRAL_QUESTIONS[0]: st.session_state.q_text = selected_q
 
-        top_text = st.text_area("상단 문구 (엔터로 1,2줄 구분)", st.session_state.q_text, height=80)
+        # [수정됨] 안내 문구 변경
+        top_text = st.text_area("상단 문구 (원하는 곳에서 엔터를 쳐주세요)", st.session_state.q_text, height=80)
     
     st.header("🎨 디자인 (매운맛)")
     with st.expander("⬆️ 상단 바 (Top Bar) 설정", expanded=True):
@@ -200,10 +211,10 @@ with col_L:
         
         st.markdown("---")
         col_t1, col_t2 = st.columns(2)
-        with col_t1: top_fs = st.slider("🅰️ 글자 크기", 20, 150, 65)
+        with col_t1: top_fs = st.slider("🅰️ 글자 크기", 20, 150, 100)
         with col_t2: top_y_adj = st.slider("↕️ 글자 위치 조절", -200, 200, 0)
         
-        st.caption("줄별 색상")
+        st.caption("줄별 색상 (엔터 기준 1줄/2줄)")
         c_tc1, c_tc2 = st.columns(2)
         with c_tc1: top_color_1 = st.color_picker("1번째 줄", "#FF0000", key="tc1") 
         with c_tc2: top_color_2 = st.color_picker("2번째 줄", "#FFFFFF", key="tc2")
@@ -246,6 +257,6 @@ with col_R:
         st.image(final_img, use_container_width=True)
         buf = BytesIO()
         final_img.save(buf, format="JPEG", quality=100)
-        st.download_button("💾 이미지 다운로드", buf.getvalue(), "shorts_politics.jpg", "image/jpeg", use_container_width=True)
+        st.download_button("💾 이미지 다운로드", buf.getvalue(), "shorts_season2.jpg", "image/jpeg", use_container_width=True)
     else:
         st.error("오류: 4명의 인물 데이터가 필요합니다.")
